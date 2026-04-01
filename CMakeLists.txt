@@ -11,48 +11,45 @@ endif()
 set(CMAKE_PROJECT_NAME stm32-dw3000-g474re-ioc-shell)
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
-project(${CMAKE_PROJECT_NAME} C ASM)
-
-set(CMAKE_EXECUTABLE_SUFFIX ".elf")
-
-set(CMAKE_C_LINK_EXECUTABLE
-  "<CMAKE_C_COMPILER> <FLAGS> <CMAKE_C_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>"
-)
-
-set(CMAKE_ASM_LINK_EXECUTABLE
-  "<CMAKE_C_COMPILER> <FLAGS> <CMAKE_C_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>"
-)
-
+project(${CMAKE_PROJECT_NAME})
 message("Build type: " ${CMAKE_BUILD_TYPE})
 
 # -----------------------------------------------------------------------------
 # ROLE handling (TX / RX)
 # -----------------------------------------------------------------------------
 if(NOT DEFINED ROLE)
-    set(ROLE "TX")
+    set(ROLE "TX")   # default
 endif()
 
 string(TOUPPER "${ROLE}" ROLE_UPPER)
 message(STATUS "ROLE from build: ${ROLE_UPPER}")
 
 set(UWB_ROLE_DEFINE "")
+set(ROLE_SUFFIX "")
+
 if("${ROLE_UPPER}" STREQUAL "TX")
     set(UWB_ROLE_DEFINE UWB_ROLE_TX)
+    set(ROLE_SUFFIX "tx")
 elseif("${ROLE_UPPER}" STREQUAL "RX")
     set(UWB_ROLE_DEFINE UWB_ROLE_RX)
+    set(ROLE_SUFFIX "rx")
 else()
     message(FATAL_ERROR "Invalid ROLE: ${ROLE_UPPER} (use TX or RX)")
 endif()
 
 # -----------------------------------------------------------------------------
 # Optional user config header
+# build option: -DUWB_USE_USER_CFG_FILE=ON
 # -----------------------------------------------------------------------------
+
 option(UWB_USE_USER_CFG_FILE "Enable uwb_user_cfg.h override" OFF)
 
 if(UWB_USE_USER_CFG_FILE)
     message(STATUS "UWB user config ENABLED")
     add_compile_definitions(UWB_USE_USER_CFG_FILE=1)
 endif()
+
+enable_language(C ASM)
 
 add_executable(${CMAKE_PROJECT_NAME})
 
@@ -77,25 +74,30 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
     stm32cubemx
 )
 
-set(LINKER_SCRIPT ${CMAKE_SOURCE_DIR}/STM32G474XX_FLASH.ld)
-
-target_link_options(${CMAKE_PROJECT_NAME} PRIVATE
-    -T${LINKER_SCRIPT}
-    -Wl,-Map=${CMAKE_PROJECT_NAME}.map
-    -Wl,--gc-sections
-    -Wl,--print-memory-usage
-)
-
+# Post-build: generate .bin and .hex for delivery
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/delivery
+
     COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
             ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
     COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
             ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
+
+    # Common delivery artifact (existing behavior)
     COMMAND ${CMAKE_COMMAND} -E copy
             ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
             ${CMAKE_SOURCE_DIR}/delivery/firmware.bin
     COMMAND ${CMAKE_COMMAND} -E copy
             ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
             ${CMAKE_SOURCE_DIR}/delivery/firmware.hex
-    COMMENT "Generating and copying .bin and .hex for delivery"
+
+    # Role-specific delivery artifact
+    COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
+            ${CMAKE_SOURCE_DIR}/delivery/firmware_${ROLE_SUFFIX}.bin
+    COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
+            ${CMAKE_SOURCE_DIR}/delivery/firmware_${ROLE_SUFFIX}.hex
+
+    COMMENT "Generating and copying .bin/.hex for common + role-specific delivery"
 )

@@ -421,40 +421,51 @@ typedef enum {
 
 static uwb_error_codes uwb_lib_init(void)
 {
+    const int max_tries = 10;
+    const uint32_t retry_delay_ms = 20;
+
     printf("[DBG] uwb_lib_init enter\r\n");
-    uint32_t dev_id = dwt_readdevid();
 
-    printf("[DBG] before check_dev_id\r\n");
-    if (dwt_check_dev_id() == DWT_ERROR) {
-        printf("[STEP3] Unknown device id: 0x%08lX\r\n", (unsigned long)dev_id);
-        return UWB_ERROR_CONNECT;
-    }
+    for (int attempt = 1; attempt <= max_tries; attempt++) {
+        uint32_t dev_id = dwt_readdevid();
 
-    printf("[STEP3] Device id: 0x%08lX\r\n", (unsigned long)dev_id);
+        printf("[DBG] dev_id try=%d val=0x%08lX\r\n",
+               attempt, (unsigned long)dev_id);
 
-    printf("[DBG] before idle loop\r\n");
-    int cnt = 1000;
-    while (!dwt_checkidlerc()) {
-        if (cnt <= 0) {
-            printf("[STEP3] Idle failed\r\n");
-            return UWB_ERROR_TIMEOUT;
+        if ((dev_id == DWT_C0_DEV_ID) || (dev_id == DWT_C0_PDOA_DEV_ID)) {
+            printf("[STEP3] Device id: 0x%08lX\r\n", (unsigned long)dev_id);
+
+            printf("[DBG] before idle loop\r\n");
+            int cnt = 1000;
+            while (!dwt_checkidlerc()) {
+                if (cnt <= 0) {
+                    printf("[STEP3] Idle failed\r\n");
+                    return UWB_ERROR_TIMEOUT;
+                }
+                cnt--;
+                deca_sleep(1);
+            }
+
+            printf("[DBG] before initialise\r\n");
+            if (dwt_initialise(DWT_DW_INIT) == DWT_ERROR) {
+                printf("[STEP3] Init failed\r\n");
+                return UWB_ERROR_INIT;
+            }
+
+            printf("[DBG] after initialise rc=0\r\n");
+            return UWB_OK;
         }
-        if (cnt % 100 == 0) {
-            printf("[DBG] idle wait cnt=%d\r\n", cnt);
-        }
-        cnt--;
-        deca_sleep(1);
+
+        printf("[STEP3] Unknown device id: 0x%08lX (try %d/%d)\r\n",
+               (unsigned long)dev_id, attempt, max_tries);
+
+        /* optional: reset once before retry */
+        dw3000_reset();
+        HAL_Delay(retry_delay_ms);
     }
 
-    printf("[DBG] before initialise\r\n");
-    int init_rc = dwt_initialise(DWT_DW_INIT);
-    printf("[DBG] after initialise rc=%d\r\n", init_rc);
-    if (init_rc == DWT_ERROR) {
-        printf("[STEP3] Init failed\r\n");
-        return UWB_ERROR_INIT;
-    }
-
-    return UWB_OK;
+    printf("[STEP3] Device id read failed after retries\r\n");
+    return UWB_ERROR_CONNECT;
 }
 
 static dwt_config_t default_config = {
@@ -1646,7 +1657,13 @@ int main(void)
 
   // 2) MCU-level reset and initialization
   dw3000_reset();
-  uwb_lib_init();
+  uwb_error_codes init_rc = uwb_lib_init();
+  if (init_rc != UWB_OK) {
+      printf("[STEP3] uwb_lib_init failed rc=%d\r\n", (int)init_rc);
+      while (1) {
+          HAL_Delay(1000);
+      }
+  }
 
   // 3) Apply config to MAC layer
   apply_uwb_cfg(&g_sys_cfg);
