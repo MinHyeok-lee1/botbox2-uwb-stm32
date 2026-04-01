@@ -12,6 +12,17 @@ set(CMAKE_PROJECT_NAME stm32-dw3000-g474re-ioc-shell)
 set(CMAKE_EXPORT_COMPILE_COMMANDS TRUE)
 
 project(${CMAKE_PROJECT_NAME} C ASM)
+
+set(CMAKE_EXECUTABLE_SUFFIX ".elf")
+
+set(CMAKE_C_LINK_EXECUTABLE
+  "<CMAKE_C_COMPILER> <FLAGS> <CMAKE_C_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>"
+)
+
+set(CMAKE_ASM_LINK_EXECUTABLE
+  "<CMAKE_C_COMPILER> <FLAGS> <CMAKE_C_LINK_FLAGS> <LINK_FLAGS> <OBJECTS> -o <TARGET> <LINK_LIBRARIES>"
+)
+
 message("Build type: " ${CMAKE_BUILD_TYPE})
 
 # -----------------------------------------------------------------------------

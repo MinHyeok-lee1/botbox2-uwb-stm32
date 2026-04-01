@@ -421,8 +421,10 @@ typedef enum {
 
 static uwb_error_codes uwb_lib_init(void)
 {
+    printf("[DBG] uwb_lib_init enter\r\n");
     uint32_t dev_id = dwt_readdevid();
 
+    printf("[DBG] before check_dev_id\r\n");
     if (dwt_check_dev_id() == DWT_ERROR) {
         printf("[STEP3] Unknown device id: 0x%08lX\r\n", (unsigned long)dev_id);
         return UWB_ERROR_CONNECT;
@@ -430,17 +432,24 @@ static uwb_error_codes uwb_lib_init(void)
 
     printf("[STEP3] Device id: 0x%08lX\r\n", (unsigned long)dev_id);
 
+    printf("[DBG] before idle loop\r\n");
     int cnt = 1000;
     while (!dwt_checkidlerc()) {
         if (cnt <= 0) {
             printf("[STEP3] Idle failed\r\n");
             return UWB_ERROR_TIMEOUT;
         }
+        if (cnt % 100 == 0) {
+            printf("[DBG] idle wait cnt=%d\r\n", cnt);
+        }
         cnt--;
         deca_sleep(1);
     }
 
-    if (dwt_initialise(DWT_DW_INIT) == DWT_ERROR) {
+    printf("[DBG] before initialise\r\n");
+    int init_rc = dwt_initialise(DWT_DW_INIT);
+    printf("[DBG] after initialise rc=%d\r\n", init_rc);
+    if (init_rc == DWT_ERROR) {
         printf("[STEP3] Init failed\r\n");
         return UWB_ERROR_INIT;
     }
@@ -1648,13 +1657,6 @@ int main(void)
 
   printf("[STEP3] apply_uwb_cfg done\r\n");
 
-  /* Call runtime role logic (infinite loops) */
-  if (runtime_role == UWB_ROLE_TAG) {
-      tag_main();
-  } else {
-      anchor_main();
-  }
-
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -1662,6 +1664,14 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
+
+    if (runtime_role == UWB_ROLE_TAG) {
+        printf("[MAIN] Starting TX application (TAG)\r\n");
+        tag_main();
+    } else {
+        printf("[MAIN] Starting RX application (ANCHOR)\r\n");
+        anchor_main();
+    }
 
     /* USER CODE BEGIN 3 */
   }
