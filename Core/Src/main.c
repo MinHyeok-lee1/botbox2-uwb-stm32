@@ -395,11 +395,11 @@ static inline void micros_delay(uint32_t us)
 }
 
 /* ===== DW3000 pin mapping ===== */
-#define DW3000_CS_PORT     GPIOB
-#define DW3000_CS_PIN      GPIO_PIN_6
+#define DW3000_CS_PORT     UWB_SPI1_CS_GPIO_Port
+#define DW3000_CS_PIN      UWB_SPI1_CS_Pin
 
-#define DW3000_RST_PORT    GPIOA
-#define DW3000_RST_PIN     GPIO_PIN_8
+#define DW3000_RST_PORT    UWB_RESET_GPIO_Port
+#define DW3000_RST_PIN     UWB_RESET_Pin
 /* ========================================= */
 
 static void dw3000_reset(void)
@@ -1647,6 +1647,13 @@ int main(void)
   uwb_print_radio_params_3lines();
 
   printf("[STEP3] apply_uwb_cfg done\r\n");
+
+  /* Call runtime role logic (infinite loops) */
+  if (runtime_role == UWB_ROLE_TAG) {
+      tag_main();
+  } else {
+      anchor_main();
+  }
 
   /* USER CODE END 2 */
 
