@@ -1,7 +1,7 @@
 # stm32-dw3000-g474re-ioc-shell Task Dashboard
 
 ## Project: main.c Migration Review and Patch
-Current Status: `Planning`
+Current Status: `Patched / Ready for bring-up`
 
 ### Phase 1: Analysis & Review (Completed)
 - [x] Analyze `main.c` for hardcoded pin mappings.
