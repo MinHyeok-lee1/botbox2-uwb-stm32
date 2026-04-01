@@ -20,3 +20,4 @@ Current Status: `Patched / Ready for bring-up`
 
 ### Phase 4: Verification (Completed)
 - [x] Manual verification and walkthrough.
+- [x] Patch `main.c` to enable `printf` over LPUART1 (COM Port).
