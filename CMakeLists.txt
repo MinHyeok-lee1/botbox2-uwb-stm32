@@ -17,22 +17,21 @@ message("Build type: " ${CMAKE_BUILD_TYPE})
 # -----------------------------------------------------------------------------
 # ROLE handling (TX / RX)
 # -----------------------------------------------------------------------------
+# NOTE:
+# Keep compile-time ROLE define for now to preserve current source compatibility.
+# We intentionally remove role-specific delivery artifacts and noisy build log output.
 if(NOT DEFINED ROLE)
     set(ROLE "TX")   # default
 endif()
 
 string(TOUPPER "${ROLE}" ROLE_UPPER)
-message(STATUS "ROLE from build: ${ROLE_UPPER}")
 
 set(UWB_ROLE_DEFINE "")
-set(ROLE_SUFFIX "")
 
 if("${ROLE_UPPER}" STREQUAL "TX")
     set(UWB_ROLE_DEFINE UWB_ROLE_TX)
-    set(ROLE_SUFFIX "tx")
 elseif("${ROLE_UPPER}" STREQUAL "RX")
     set(UWB_ROLE_DEFINE UWB_ROLE_RX)
-    set(ROLE_SUFFIX "rx")
 else()
     message(FATAL_ERROR "Invalid ROLE: ${ROLE_UPPER} (use TX or RX)")
 endif()
@@ -74,16 +73,17 @@ target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
     stm32cubemx
 )
 
-# Post-build: generate .bin and .hex for delivery
+# Post-build: generate common delivery .bin and .hex only
 add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_SOURCE_DIR}/delivery
 
-    COMMAND ${CMAKE_OBJCOPY} -O binary $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+    COMMAND ${CMAKE_OBJCOPY} -O binary
+            $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
             ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
-    COMMAND ${CMAKE_OBJCOPY} -O ihex $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+    COMMAND ${CMAKE_OBJCOPY} -O ihex
+            $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
             ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
 
-    # Common delivery artifact (existing behavior)
     COMMAND ${CMAKE_COMMAND} -E copy
             ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
             ${CMAKE_SOURCE_DIR}/delivery/firmware.bin
@@ -91,13 +91,5 @@ add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
             ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
             ${CMAKE_SOURCE_DIR}/delivery/firmware.hex
 
-    # Role-specific delivery artifact
-    COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
-            ${CMAKE_SOURCE_DIR}/delivery/firmware_${ROLE_SUFFIX}.bin
-    COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
-            ${CMAKE_SOURCE_DIR}/delivery/firmware_${ROLE_SUFFIX}.hex
-
-    COMMENT "Generating and copying .bin/.hex for common + role-specific delivery"
+    COMMENT "Generating and copying common delivery firmware (.bin/.hex)"
 )
