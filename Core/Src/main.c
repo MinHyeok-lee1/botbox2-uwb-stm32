@@ -55,7 +55,7 @@
 
 // ===== 튜닝 파라미터 =====
 #define POLL_TX_TO_RESP_RX_DLY_UUS 900
-#define RESP_RX_TIMEOUT_UUS         1500  
+#define RESP_RX_TIMEOUT_UUS         1600  
 #define POLL_RX_TO_RESP_TX_DLY_UUS   1400   
 
 #define TX_ANT_DLY 16385
@@ -1580,9 +1580,7 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
   micros_init();
-  micros_self_test();
 
-HAL_Delay(10000);
 #ifdef UWB_ROLE_TX
   uint8_t compiled_role = UWB_ROLE_TAG;
 #else
