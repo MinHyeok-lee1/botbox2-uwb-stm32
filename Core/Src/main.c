@@ -20,6 +20,7 @@
 #include "main.h"
 #include "fdcan.h"
 #include "fmac.h"
+#include "stm32g4xx_hal.h"
 #include "usart.h"
 #include "spi.h"
 #include "tim.h"
@@ -59,6 +60,14 @@
 
 #define TX_ANT_DLY 16385
 #define RX_ANT_DLY 16385
+
+// ===== Operations Tuning =====
+// ===== Operations Tuning =====
+#define ANCHOR_LINK_TIMEOUT_MS  5000U  // Initial threshold for "Lost" state (ms)
+#define ANCHOR_LOST_LOG_MS      5000U  // Interval for "Still Lost" reminders (ms)
+#define TAG_RANGING_RATE_HZ   6U    // Target Frequency (Full Scans per second)
+#define TAG_ANCHOR_SLOT_MS    20U    // Per-anchor baseline budget (includes retries)
+#define TAG_MIN_GAP_MS         2U    // Safety floor between scans (ms)
 
 
 
@@ -252,6 +261,7 @@
 #endif
 
 /* USER CODE END Includes */
+void Error_Handler(void);
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
@@ -298,6 +308,7 @@ void twr_dist_filter_init(void)
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+
 
 /* USER CODE BEGIN PV */
 
@@ -395,8 +406,8 @@ static inline void micros_delay(uint32_t us)
 }
 
 /* ===== DW3000 pin mapping ===== */
-#define DW3000_CS_PORT     UWB_SPI1_CS_GPIO_Port
-#define DW3000_CS_PIN      UWB_SPI1_CS_Pin
+#define DW3000_CS_PORT     UWB_SPI_CS_GPIO_Port
+#define DW3000_CS_PIN      UWB_SPI_CS_Pin
 
 #define DW3000_RST_PORT    UWB_RESET_GPIO_Port
 #define DW3000_RST_PIN     UWB_RESET_Pin
@@ -421,51 +432,31 @@ typedef enum {
 
 static uwb_error_codes uwb_lib_init(void)
 {
-    const int max_tries = 10;
-    const uint32_t retry_delay_ms = 20;
+    uint32_t dev_id = dwt_readdevid();
 
-    printf("[DBG] uwb_lib_init enter\r\n");
-
-    for (int attempt = 1; attempt <= max_tries; attempt++) {
-        uint32_t dev_id = dwt_readdevid();
-
-        printf("[DBG] dev_id try=%d val=0x%08lX\r\n",
-               attempt, (unsigned long)dev_id);
-
-        if ((dev_id == DWT_C0_DEV_ID) || (dev_id == DWT_C0_PDOA_DEV_ID)) {
-            printf("[STEP3] Device id: 0x%08lX\r\n", (unsigned long)dev_id);
-
-            printf("[DBG] before idle loop\r\n");
-            int cnt = 1000;
-            while (!dwt_checkidlerc()) {
-                if (cnt <= 0) {
-                    printf("[STEP3] Idle failed\r\n");
-                    return UWB_ERROR_TIMEOUT;
-                }
-                cnt--;
-                deca_sleep(1);
-            }
-
-            printf("[DBG] before initialise\r\n");
-            if (dwt_initialise(DWT_DW_INIT) == DWT_ERROR) {
-                printf("[STEP3] Init failed\r\n");
-                return UWB_ERROR_INIT;
-            }
-
-            printf("[DBG] after initialise rc=0\r\n");
-            return UWB_OK;
-        }
-
-        printf("[STEP3] Unknown device id: 0x%08lX (try %d/%d)\r\n",
-               (unsigned long)dev_id, attempt, max_tries);
-
-        /* optional: reset once before retry */
-        dw3000_reset();
-        HAL_Delay(retry_delay_ms);
+    if (dwt_check_dev_id() == DWT_ERROR) {
+        printf("[STEP3] Unknown device id: 0x%08lX\r\n", (unsigned long)dev_id);
+        return UWB_ERROR_CONNECT;
     }
 
-    printf("[STEP3] Device id read failed after retries\r\n");
-    return UWB_ERROR_CONNECT;
+    printf("[STEP3] Device id: 0x%08lX\r\n", (unsigned long)dev_id);
+
+    int cnt = 1000;
+    while (!dwt_checkidlerc()) {
+        if (cnt <= 0) {
+            printf("[STEP3] Idle failed\r\n");
+            return UWB_ERROR_TIMEOUT;
+        }
+        cnt--;
+        deca_sleep(1);
+    }
+
+    if (dwt_initialise(DWT_DW_INIT) == DWT_ERROR) {
+        printf("[STEP3] Init failed\r\n");
+        return UWB_ERROR_INIT;
+    }
+
+    return UWB_OK;
 }
 
 static dwt_config_t default_config = {
@@ -719,6 +710,8 @@ static inline void set_u16_le(uint8_t *p, uint16_t v) {
 }
 
 static bool poll_one_aid(uint16_t dst_short, float *out_m) {
+    const uint32_t t_poll_begin_us = micros();
+
     // Clear status
     dwt_forcetrxoff();
 
@@ -743,6 +736,7 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
     dwt_writetxfctrl(sizeof(tx_poll_msg) + 2, 0, 1);
 
     int ret = dwt_starttx(DWT_START_TX_IMMEDIATE | DWT_RESPONSE_EXPECTED);
+
     if (ret != DWT_SUCCESS) {
         // TX did not start -> avoid falling into RX-only loop
         dwt_forcetrxoff();
@@ -779,7 +773,14 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
 
         // safety timeout to avoid deadlock (e.g. 2ms)
         if ((micros() - tx_wait_start) > 2000U) {
-          return false;
+            uint32_t st_now = dwt_read32bitreg(SYS_STATUS_ID);
+            printf("[TWR][TIM][TAG][TXFRS_TO] AID=0x%04X SN=%u dt=%lu wait=%lu st=0x%08lX\r\n",
+                    (unsigned int)dst_short,
+                    (unsigned int)this_sn,
+                    (unsigned long)(micros() - t_poll_begin_us),
+                    (unsigned long)(micros() - tx_wait_start),
+                    (unsigned long)st_now);
+            return false;
         }
       }
     }
@@ -824,8 +825,6 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
         } while (!(st & (SYS_STATUS_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_TO | SYS_STATUS_ALL_RX_ERR)));
 
         if (st & SYS_STATUS_RXFCG_BIT_MASK) {
-            dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_RXFCG_BIT_MASK);
-
             uint32_t flen = dwt_read32bitreg(RX_FINFO_ID) & RXFLEN_MASK;
             if (flen > sizeof(rx_buf)) {
                 uint32_t elapsed = micros() - t_start;
@@ -1071,26 +1070,15 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
                                                 quality_ok, q_weight, quality_fail_reason);
         return true;
         } else {
-            printf("[RX FAIL] st=0x%08lX\r\n", (unsigned long)st);
-
+            // printf("[TWR][TIM][TAG][RXFAIL] AID=0x%04X SN=%u dt=%lu wait=%lu st=0x%08lX\r\n",
+            //         (unsigned int)dst_short,
+            //         (unsigned int)this_sn,
+            //         (unsigned long)(micros() - t_poll_begin_us),
+            //         (unsigned long)(micros() - t_start),
+            //         (unsigned long)st);
             // 기존처럼 클리어
             dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_ALL_RX_ERR | SYS_STATUS_ALL_RX_TO);
 
-        }
-
-        // RX_TO / RX_ERR handling
-        {
-            uint32_t elapsed = micros() - t_start;
-            if (elapsed < window_us) {
-                uint32_t remain = window_us - elapsed;
-                dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_ALL_RX_ERR | SYS_STATUS_ALL_RX_TO);
-                dwt_setrxtimeout(remain);
-                dwt_rxenable(DWT_START_RX_IMMEDIATE);
-                continue;
-            }
-
-            dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_ALL_RX_TO | SYS_STATUS_ALL_RX_ERR);
-            return false;
         }
     }
 }
@@ -1155,13 +1143,12 @@ static void tag_print_multi_anchor_summary(uint8_t n, const bool ok[], const flo
 }
 
 void tag_main(void) {
+    printf("[TAG][APP] Starting TAG application (Target: %u Hz)\r\n", (unsigned)TAG_RANGING_RATE_HZ);
+    
     while (1)
     {
-        /* NOTE:
-         * - anchor_count/anchor_ids는 cfg_reset_default_ram() 또는 Flash 로드 결과를 사용함.
-         * - NUM_OF_ANCHORS(고정 상수)로 돌리면, anchor_ids 미설정(0x0000) 대상까지 POLL을 보내서
-         *   ANCHOR 쪽에서 AFFREJ가 증가하고 TAG 쪽은 RX FAIL/timeout이 난다.
-         */
+        uint32_t t_start = HAL_GetTick();
+        
         uint8_t n = g_sys_cfg.anchor_count;
         if (n == 0U) n = 1U;
         if (n > 8U)  n = 8U;
@@ -1174,7 +1161,7 @@ void tag_main(void) {
             dist_m[i] = 0.0f;
         }
 
-        /* 1st try */
+        /* 1st pass: Poll all anchors defined in runtime config */
         for (uint8_t i = 0; i < n; i++) {
             uint16_t aid = g_sys_cfg.anchor_ids[i];
             if (aid == 0U) {
@@ -1184,7 +1171,7 @@ void tag_main(void) {
             ok[i] = poll_one_aid(aid, &dist_m[i]);
         }
 
-        /* retry only failures */
+        /* 2nd pass: Retry only failures once after recovery */
         for (uint8_t i = 0; i < n; i++) {
             if (ok[i]) continue;
             uint16_t aid = g_sys_cfg.anchor_ids[i];
@@ -1194,19 +1181,42 @@ void tag_main(void) {
             ok[i] = poll_one_aid(aid, &dist_m[i]);
         }
 
-        /* NEW: one-line summary for multi-anchor ranging */
+        /* Report multi-anchor summary (A1..A3 typically) */
         tag_print_multi_anchor_summary(n, ok, dist_m);
 
-        /* stats aggregation */
+        /* Stats aggregation */
         for (uint8_t i = 0; i < n; i++) {
             if (ok[i]) g_tag_stat.rx_ok++;
             else       g_tag_stat.rx_err++;
         }
 
-        /* tight loop guard / backoff */
+        /* Scalable Pacing Logic: Combine Hz-target with per-anchor safety budget */
         {
-            uint16_t backoff_us = 800U + (uint16_t)(rand() & 0x07FFU); /* 0.8~2.847 ms */
-            micros_delay(backoff_us);
+            uint32_t t_active = (uint32_t)(HAL_GetTick() - t_start);
+            
+            /* Calculate the Target Period based on Hz and a Scalability Floor */
+            uint32_t period_target = 1000U / TAG_RANGING_RATE_HZ;
+            /* period_min (Layer 1): prevents radio saturation as anchor_count grows */
+            uint32_t period_min    = n * TAG_ANCHOR_SLOT_MS;
+            
+            if (period_target < period_min) period_target = period_min;
+            
+            uint32_t t_wait = 0;
+            bool overrun = false;
+            
+            if (t_active + TAG_MIN_GAP_MS > period_target) {
+                /* Target rate missed due to UWB time-of-flight, timeouts, or high counts */
+                overrun = true;
+                t_wait = TAG_MIN_GAP_MS;
+            } else {
+                t_wait = period_target - t_active;
+            }
+            
+            /* Diagnostic CYCLE log: baseline metrics for tuning */
+            printf("[TAG][CYCLE] air=%u wait=%u target=%u overrun=%d\r\n", 
+                   (unsigned)t_active, (unsigned)t_wait, (unsigned)period_target, (int)overrun);
+            
+            HAL_Delay(t_wait);
         }
     }
 }
@@ -1235,7 +1245,6 @@ void tag_main(void) {
 //   DWT_STS_MODE_OFF, DWT_STS_LEN_64, DWT_PDOA_M0
 // };
 // static dwt_txconfig_t txcfg = { 0xC2, 0x25456585 };
-
 // RESP: [FCF2][SN][DST_PAN2][DST_ADDR2][SRC_ADDR2][TYPE][TS1_4][TS2_4][RSV]
 static uint8_t tx_resp_msg[] = {
   0x41, 0x88, 0x00,   // 0..2
@@ -1248,41 +1257,17 @@ static uint8_t tx_resp_msg[] = {
   0x00                // 18     reserved
 };
 
-
-// Utils
-static inline void put_ts4(uint8_t *dst4, uint64_t ts) {
-  dst4[0] = (uint8_t) ts;
-  dst4[1] = (uint8_t)(ts >> 8);
-  dst4[2] = (uint8_t)(ts >> 16);
-  dst4[3] = (uint8_t)(ts >> 24);
-}
 static inline void hexdump(const char* tag, const uint8_t* p, uint32_t n)
 {
-    // 필요에 따라 사이즈 조정 (너무 크면 스택 말고 static으로 빼도 됨)
     char buf[256];
     int pos = 0;
-
-    // 헤더
-    pos += snprintf(&buf[pos], sizeof(buf) - (size_t)pos,
-                    "%s (%lu bytes): ", tag, (unsigned long)n);
-
-    // 본문
+    pos += snprintf(&buf[pos], sizeof(buf) - (size_t)pos, "%s (%lu bytes): ", tag, (unsigned long)n);
     for (uint32_t i = 0; i < n && pos < (int)sizeof(buf) - 4; i++) {
-        pos += snprintf(&buf[pos], sizeof(buf) - (size_t)pos,
-                        "%02X ", (unsigned int)p[i]);
+        pos += snprintf(&buf[pos], sizeof(buf) - (size_t)pos, "%02X ", (unsigned int)p[i]);
     }
-
-    // 줄바꿈
     if (pos < (int)sizeof(buf) - 2) {
-        buf[pos++] = '\r';
-        buf[pos++] = '\n';
-        buf[pos]   = '\0';
-    } else {
-        buf[sizeof(buf) - 3] = '\r';
-        buf[sizeof(buf) - 2] = '\n';
-        buf[sizeof(buf) - 1] = '\0';
+        buf[pos++] = '\r'; buf[pos++] = '\n'; buf[pos] = '\0';
     }
-
     printf("%s", buf);
 }
 
@@ -1290,11 +1275,23 @@ static inline uint16_t get_u16_le(const uint8_t *p) {
     return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
 }
 
+static inline void put_ts4(uint8_t *dst4, uint64_t ts) {
+  dst4[0] = (uint8_t) ts;
+  dst4[1] = (uint8_t)(ts >> 8);
+  dst4[2] = (uint8_t)(ts >> 16);
+  dst4[3] = (uint8_t)(ts >> 24);
+}
+
 void anchor_main()
 {
     printf("[RX][APP] Starting RX application\r\n");
+    
+    /* Link State Tracking */
+    uint32_t last_matched_ms = HAL_GetTick();
+    uint32_t last_lost_log_ms = 0;
+    bool link_alive = true;
 
-    /* --- 루프에서 재사용할 상수/오프셋 미리 계산 (DTU/H 단위) --- */
+    /* --- Pre-calculate loop-reusable DTU/H units for delayed TX timing --- */
     const uint32_t resp_tx_dly_dtu_h =
         (uint32_t)(((uint64_t)POLL_RX_TO_RESP_TX_DLY_UUS * UUS_TO_DWT_TIME) >> 8);
 
@@ -1302,7 +1299,7 @@ void anchor_main()
 
     while (1)
     {
-        /* --- RX 준비: 상태 클리어 + 즉시 RX 시작 --- */
+        /* RE-ARM RX: Clear status bits and enable RX immediately */
         dwt_write32bitreg(SYS_STATUS_ID,
                           SYS_STATUS_RXFCG_BIT_MASK |
                           SYS_STATUS_ALL_RX_ERR     |
@@ -1311,38 +1308,47 @@ void anchor_main()
 
         dwt_rxenable(DWT_START_RX_IMMEDIATE);
 
-        /* RX 완료 or 에러 or 타임아웃 대기 */
+        /* --- Polling loop with Link-State Timeout Check --- */
         uint32_t status;
         do
         {
             status = dwt_read32bitreg(SYS_STATUS_ID);
+            
+            /* Link State Check: Handles initial Loss and repeated Reminders */
+            uint32_t tick_ms = HAL_GetTick();
+            if (link_alive) {
+                if ((uint32_t)(tick_ms - last_matched_ms) >= ANCHOR_LINK_TIMEOUT_MS) {
+                    printf("[ANC][LINK] lost: no matched poll for %lu ms\r\n", (unsigned long)ANCHOR_LINK_TIMEOUT_MS);
+                    link_alive = false;
+                    last_lost_log_ms = tick_ms;
+                }
+            } else {
+                if ((uint32_t)(tick_ms - last_lost_log_ms) >= ANCHOR_LOST_LOG_MS) {
+                    uint32_t total_lost_ms = (uint32_t)(tick_ms - last_matched_ms);
+                    printf("[ANC][LINK] lost: still no matched poll for %lu ms\r\n", (unsigned long)total_lost_ms);
+                    last_lost_log_ms = tick_ms;
+                }
+            }
+
         } while (!(status & (SYS_STATUS_RXFCG_BIT_MASK | SYS_STATUS_AFFREJ_BIT_MASK | SYS_STATUS_RXERR_ALL_MASK | SYS_STATUS_RXTO_ALL_MASK)));
 
-        /* RX 에러/타임아웃/AFFREJ 경로 */
+        /* [ERROR / TIMEOUT / FILTER-REJECT PATH] */
         if ((status & SYS_STATUS_RXFCG_BIT_MASK) == 0U)
         {
             uint32_t clr = 0U;
-            /* const uint32_t fce    = ((status & SYS_STATUS_RXFCE_BIT_MASK) != 0U) ? 1U : 0U;
-            const uint32_t phe    = ((status & SYS_STATUS_RXPHE_BIT_MASK) != 0U) ? 1U : 0U;
-            const uint32_t rfsl   = ((status & SYS_STATUS_RXFSL_BIT_MASK) != 0U) ? 1U : 0U;
-            const uint32_t rfto   = ((status & SYS_STATUS_RXFTO_BIT_MASK) != 0U) ? 1U : 0U; */
             const uint32_t arfe   = ((status & SYS_STATUS_ARFE_BIT_MASK) != 0U) ? 1U : 0U;
             const uint32_t affrej = ((status & SYS_STATUS_AFFREJ_BIT_MASK) != 0U) ? 1U : 0U;
             const uint32_t is_affrej = (affrej || arfe) ? 1U : 0U;
             const uint32_t is_to     = ((status & SYS_STATUS_RXTO_ALL_MASK)  != 0U) ? 1U : 0U;
-            // const uint32_t is_err    = ((status & SYS_STATUS_RXERR_ALL_MASK) != 0U) ? 1U : 0U;
+            const uint32_t rxerr_no_arfe = (SYS_STATUS_RXERR_ALL_MASK & ~SYS_STATUS_ARFE_BIT_MASK);
+            const uint32_t is_err    = ((status & rxerr_no_arfe) != 0U) ? 1U : 0U;
 
-            /* ARFE(=주소/PAN 필터 reject)는 rx_err에서 제외해서 통계 분리 */
-             const uint32_t rxerr_no_arfe = (SYS_STATUS_RXERR_ALL_MASK & ~SYS_STATUS_ARFE_BIT_MASK);
-             const uint32_t is_err    = ((status & rxerr_no_arfe) != 0U) ? 1U : 0U;
-
-            /* 분리 집계: AFFREJ는 rx_err와 분리 */
             if (is_affrej) { g_anc_stat.rx_affrej++; clr |= SYS_STATUS_AFFREJ_BIT_MASK; }
             if (is_to)     { g_anc_stat.rx_to++;     clr |= SYS_STATUS_RXTO_ALL_MASK;  }
             if ((!is_affrej) && (!is_to) && is_err) { g_anc_stat.rx_err++; clr |= SYS_STATUS_RXERR_ALL_MASK; }
-            if (is_affrej && is_err) { clr |= SYS_STATUS_RXERR_ALL_MASK; } /* 상태 비트는 클리어 */
+            if (is_affrej && is_err) { clr |= SYS_STATUS_RXERR_ALL_MASK; }
 
-            /* AFFREJ burst guard: short window burst -> RX re-arm */
+            /* AFFREJ burst protection: re-arm if too many filtered frames arrive too fast */
             {
                 uint32_t now_ms = HAL_GetTick();
                 if ((uint32_t)(now_ms - g_affrej_window_ms) > 50U) {
@@ -1357,125 +1363,90 @@ void anchor_main()
                     g_affrej_window_cnt = 0U;
                 }
             }
-
             if (clr != 0U) dwt_write32bitreg(SYS_STATUS_ID, clr);
 
-            /* RXST rate limit: AFFREJ 64건당 1회 */
-            /* if ((!is_affrej) || ((g_anc_stat.rx_affrej & 0x3FUL) == 0UL)) {
-                printf("[RXST] st=0x%08lX fcg=0 affrej=%lu fce=%lu phe=%lu rfsl=%lu rfto=%lu arfe=%lu\r\n",
-                       (unsigned long)status,
-                       (unsigned long)affrej,
-                       (unsigned long)fce,
-                       (unsigned long)phe,
-                       (unsigned long)rfsl,
-                       (unsigned long)rfto,
-                       (unsigned long)arfe);
-            } */
-
+            /* Diagnostic stats (rate-limited internally) */
             twr_stats_maybe_print("[ANC]", &g_anc_stat);
             continue;
         }
 
-        /* 정상 수신(RXFCG) */
+        /* [SUCCESS PATH: Frame received and passed hardware filtering] */
         dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_RXFCG_BIT_MASK);
-
-        /* 프레임 길이 확인 */
         uint32_t flen = dwt_read32bitreg(RX_FINFO_ID) & RXFLEN_MASK;
-        if (flen > sizeof(rx_buf) || flen < ALL_MSG_COMMON_LEN)
-        {
-            continue;
-        }
+        if (flen > sizeof(rx_buf) || flen < ALL_MSG_COMMON_LEN) continue;
 
         dwt_readrxdata(rx_buf, flen, 0);
 
-        /* 공통 헤더/필드 */
-        const uint8_t  rx_sn = rx_buf[ALL_MSG_SN_IDX];
-
+        /* Verify standard frame control and UWB message type (0xE0 = POLL) */
         const bool fc_ok   = (rx_buf[0] == 0x41 && rx_buf[1] == 0x88);
         const bool type_ok = (flen > POLL_TYPE_IDX) && (rx_buf[POLL_TYPE_IDX] == 0xE0);
-
         if (!fc_ok || !type_ok) continue;
-
-        /* 주소 필드는 길이 보장 후 파싱 */
-        if (flen <= (POLL_DST_PAN_IDX + 1) ||
-            flen <= (POLL_DST_ADDR_IDX + 1) ||
-            flen <= (POLL_SRC_ADDR_IDX + 1))
-        {
-            continue;
-        }
 
         const uint16_t rx_dst_pan   = get_u16_le(&rx_buf[POLL_DST_PAN_IDX]);
         const uint16_t rx_dst_addr  = get_u16_le(&rx_buf[POLL_DST_ADDR_IDX]);
-        const uint16_t poll_src_addr = get_u16_le(&rx_buf[POLL_SRC_ADDR_IDX]); /* 중요: RESP DST로 사용 */
+        const uint16_t poll_src_addr = get_u16_le(&rx_buf[POLL_SRC_ADDR_IDX]);
 
-        /* SW 필터(하드웨어 FF와 별개로 안전하게 재확인) */
-         /* 검증용: HW FF를 통과해 RXFCG까지 온 "불일치" 프레임 카운트 */
-        if (rx_dst_pan != _mac.panId) { g_anc_stat.rx_fcg_bad_pan++; twr_stats_maybe_print("[ANC]", &g_anc_stat); continue; }
-        if (rx_dst_addr != _mac.addr && rx_dst_addr != 0xFFFF) { g_anc_stat.rx_fcg_bad_dst++; twr_stats_maybe_print("[ANC]", &g_anc_stat); continue; }
+        const uint32_t anc_rx_ok_us = micros();
 
+
+        /* Software Filter: Ensure packet is for this board and network */
+        if (rx_dst_pan != _mac.panId) { g_anc_stat.rx_fcg_bad_pan++; continue; }
+        if (rx_dst_addr != _mac.addr && rx_dst_addr != 0xFFFF) { g_anc_stat.rx_fcg_bad_dst++; continue; }
+
+        /* --- Link State Check: Transition to RESUMED --- */
+        if (!link_alive) {
+            printf("[ANC][LINK] resumed: matched poll received\r\n");
+            link_alive = true;
+        }
+        last_matched_ms = HAL_GetTick();
         g_anc_stat.rx_ok++;
 
-        /* === 크리티컬 파트 === */
-
-        /* 1) POLL RX timestamp */
+        /* --- Delayed Response TX Logic --- */
         const uint64_t poll_rx_ts_40 = get_rx_timestamp_u64();
         const uint32_t poll_rx_ts_h  = (uint32_t)((poll_rx_ts_40 & 0xFFFFFFFFFFULL) >> 8);
+        const uint32_t target_h      = poll_rx_ts_h + resp_tx_dly_dtu_h;
+       
 
-        /* 2) RESP 지연 TX 목표 시각 */
-        const uint32_t target_h = poll_rx_ts_h + resp_tx_dly_dtu_h;
         dwt_setdelayedtrxtime(target_h);
 
-        const uint64_t resp_tx_ts_40 =
-            (((uint64_t)(target_h & 0xFFFFFFFEUL)) << 8) +
-            (uint64_t)resp_tx_antd_offset;
+        const uint64_t resp_tx_ts_40 = (((uint64_t)(target_h & 0xFFFFFFFEUL)) << 8) + (uint64_t)resp_tx_antd_offset;
 
-        /* 3) RESP 프레임 구성 */
-        tx_resp_msg[ALL_MSG_SN_IDX] = rx_sn;
+        /* Construct RESP message from POLL source info */
+        tx_resp_msg[ALL_MSG_SN_IDX] = rx_buf[ALL_MSG_SN_IDX];
         tx_resp_msg[RESP_TYPE_IDX]  = 0xE1;
-
         set_u16_le(&tx_resp_msg[RESP_DST_PAN_IDX],  _mac.panId);
-        set_u16_le(&tx_resp_msg[RESP_DST_ADDR_IDX], poll_src_addr); /* POLL 송신자에게 응답 */
+        set_u16_le(&tx_resp_msg[RESP_DST_ADDR_IDX], poll_src_addr);
         set_u16_le(&tx_resp_msg[RESP_SRC_ADDR_IDX], _mac.addr);
-
         put_ts4(&tx_resp_msg[RESP_MSG_POLL_RX_TS_IDX],  poll_rx_ts_40);
         put_ts4(&tx_resp_msg[RESP_MSG_RESP_TX_TS_IDX], resp_tx_ts_40);
 
-        /* 4) TX 시작 */
         dwt_writetxdata(sizeof(tx_resp_msg), tx_resp_msg, 0);
         dwt_writetxfctrl(sizeof(tx_resp_msg) + 2, 0, 1);
-
-        const int tx_ret = dwt_starttx(DWT_START_TX_DELAYED);
-
-        if (tx_ret == DWT_ERROR)
-        {
+        
+        if (dwt_starttx(DWT_START_TX_DELAYED) == DWT_ERROR) {
             const uint32_t now_h  = dwt_readsystimestamphi32();
             const uint64_t now_40 = ((uint64_t)now_h) << 8;
-
             int32_t late_us = 0;
-            if (now_40 > resp_tx_ts_40)
-            {
+            if (now_40 > resp_tx_ts_40) {
                 uint64_t diff = now_40 - resp_tx_ts_40;
                 if (diff > 0x7FFFFFFFULL) diff = 0x7FFFFFFFULL;
                 late_us = (int32_t)(diff / UUS_TO_DWT_TIME);
             }
-
             g_anc_stat.tx_late++;
             twr_stats_maybe_print("[ANC]", &g_anc_stat);
-            printf("[A][LATE] SN=%u (~%ld us late)\r\n", (unsigned)rx_sn, (long)late_us);
+            printf("[A][LATE] SN=%u skipped response (~%ld us too late)\r\n", (unsigned)rx_buf[ALL_MSG_SN_IDX], (long)late_us);
             continue;
         }
 
-        /* TX 완료 대기 */
+        /* Wait for transmit completion */
         uint32_t st_tx;
-        do
-        {
-            st_tx = dwt_read32bitreg(SYS_STATUS_ID);
-        } while ((st_tx & SYS_STATUS_TXFRS_BIT_MASK) == 0U);
-
+        do { st_tx = dwt_read32bitreg(SYS_STATUS_ID); } while ((st_tx & SYS_STATUS_TXFRS_BIT_MASK) == 0U);
         dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_TXFRS_BIT_MASK);
 
         g_anc_stat.tx_ok++;
-        printf("[A] RESP TX done (SN=%u)\r\n", (unsigned)rx_sn);
+        printf("[TWR][TIM][ANC][RESP_TX] SN=%u dt=%lu\r\n",
+         (unsigned int)rx_buf[ALL_MSG_SN_IDX],
+         (unsigned long)(micros() - anc_rx_ok_us));
     }
 }
 
@@ -1545,6 +1516,7 @@ static void apply_uwb_cfg(uwb_cfg_t *cfg)
 
     // Step 3: Frame filter + LEDs (identical in both versions)
     dwt_configureframefilter(DWT_FF_ENABLE_802_15_4, DWT_FF_DATA_EN | DWT_FF_ACK_EN);
+    // dwt_configureframefilter(DWT_FF_DISABLE, 0);
     dwt_setleds(DWT_LEDS_ENABLE | DWT_LEDS_INIT_BLINK);
 
     // Step 4: Antenna delays (present in 126faf3, was missing in HEAD)
@@ -1563,33 +1535,35 @@ static void apply_uwb_cfg(uwb_cfg_t *cfg)
 }
 
 /* USER CODE END 0 */
+static void micros_self_test(void)
+{
+    uint32_t t0, t1, d;
 
+    printf("[MICROS][CFG] PSC=%lu ARR=%lu CNT=%lu\r\n",
+           (unsigned long)htim2.Instance->PSC,
+           (unsigned long)htim2.Instance->ARR,
+           (unsigned long)htim2.Instance->CNT);
+
+    t0 = micros();
+    HAL_Delay(100);
+    t1 = micros();
+    d = t1 - t0;
+
+    printf("[MICROS][TEST] 100ms_delay delta=%lu\r\n", (unsigned long)d);
+}
 /**
   * @brief  The application entry point.
   * @retval int
   */
 int main(void)
 {
-
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
-
   /* MCU Configuration--------------------------------------------------------*/
 
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
-
   /* Configure the system clock */
   SystemClock_Config();
-
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
@@ -1599,9 +1573,16 @@ int main(void)
   MX_UART5_Init();
   MX_FMAC_Init();
   MX_TIM2_Init();
+  MX_FMAC_Init();
+
+  /* Initialize COM1 port */
+  HAL_Delay(1000);
+
   /* USER CODE BEGIN 2 */
   micros_init();
+  micros_self_test();
 
+HAL_Delay(10000);
 #ifdef UWB_ROLE_TX
   uint8_t compiled_role = UWB_ROLE_TAG;
 #else
@@ -1657,13 +1638,7 @@ int main(void)
 
   // 2) MCU-level reset and initialization
   dw3000_reset();
-  uwb_error_codes init_rc = uwb_lib_init();
-  if (init_rc != UWB_OK) {
-      printf("[STEP3] uwb_lib_init failed rc=%d\r\n", (int)init_rc);
-      while (1) {
-          HAL_Delay(1000);
-      }
-  }
+  uwb_lib_init();
 
   // 3) Apply config to MAC layer
   apply_uwb_cfg(&g_sys_cfg);
