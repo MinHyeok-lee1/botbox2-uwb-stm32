@@ -2,6 +2,10 @@
 #include <stdio.h>
 #include <math.h>
 
+#ifndef TAG_VERBOSE_LOGS
+#define TAG_VERBOSE_LOGS 0
+#endif
+
 typedef struct {
     uint32_t n;
     uint64_t sum_raw;
@@ -61,6 +65,7 @@ static void twr_gt_stats_update(uint32_t raw_mm, uint32_t med_mm, uint32_t iir_m
     if ((TWR_GT_PRINT_EVERY != 0U) && ((g_twr_gt.n % TWR_GT_PRINT_EVERY) == 0U)) {
         const uint32_t n = g_twr_gt.n;
 
+#if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS
         const uint32_t mean_raw = (uint32_t)(g_twr_gt.sum_raw / (uint64_t)n);
         const uint32_t mean_med = (uint32_t)(g_twr_gt.sum_med / (uint64_t)n);
         const uint32_t mean_iir = (uint32_t)(g_twr_gt.sum_iir / (uint64_t)n);
@@ -86,6 +91,7 @@ static void twr_gt_stats_update(uint32_t raw_mm, uint32_t med_mm, uint32_t iir_m
                (unsigned long)mean_raw, (unsigned long)std_raw, (long)err_mean_raw,
                (unsigned long)mean_med, (unsigned long)std_med, (long)err_mean_med,
                (unsigned long)mean_iir, (unsigned long)std_iir, (long)err_mean_iir);
+#endif
     }
 #else
     (void)raw_mm; (void)med_mm; (void)iir_mm;
@@ -196,14 +202,15 @@ void twr_dist_filter_update_and_log_mm_ex(uint16_t anchor_id,
     const char *quality_fail_reason)
 {
     twr_dist_filter_t *f = twr_get_filter_by_anchor(anchor_id);
-    if (f == NULL) {
-        long raw_l = (long)((dist_raw_mm >= 0.0f) ? (dist_raw_mm + 0.5f) : (dist_raw_mm - 0.5f));
+#if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS
+    {
+        long raw_l_local = (long)((dist_raw_mm >= 0.0f) ? (dist_raw_mm + 0.5f) : (dist_raw_mm - 0.5f));
         printf("[TWR][TAG][DIST] AID=0x%04X SN=%u raw=%ld q=-1 clean_med=-1 iir=-1 mm\r\n",
                (unsigned int)anchor_id,
                (unsigned int)seq,
-               raw_l);
-        return;
+               raw_l_local);
     }
+#endif
 
     float dist_med_mm = dist_raw_mm;
     float dist_iir_mm = dist_raw_mm;
@@ -251,8 +258,7 @@ void twr_dist_filter_update_and_log_mm_ex(uint16_t anchor_id,
         long iir_l_temp = (f->iir_initialized != 0U)
             ? (long)((dist_iir_mm >= 0.0f) ? (dist_iir_mm + 0.5f) : (dist_iir_mm - 0.5f)) : -1L;
 
-        const char *reason_str = (quality_fail_reason != NULL) ? quality_fail_reason : "unknown";
-
+#if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS
         printf("[TWR][FILT][SKIP] AID=0x%04X SN=%u raw=%ld q=%ld clean_med=%ld iir=%ld reason=%s\r\n",
             (unsigned int)anchor_id,
             (unsigned int)seq,
@@ -261,6 +267,7 @@ void twr_dist_filter_update_and_log_mm_ex(uint16_t anchor_id,
                 med_l_temp,
                 iir_l_temp,
                 reason_str);
+#endif
             }
 
     // ===== 로그용 정수 변환(반올림) =====
@@ -281,6 +288,7 @@ void twr_dist_filter_update_and_log_mm_ex(uint16_t anchor_id,
         iir_l = (long)((dist_iir_mm >= 0.0f) ? (dist_iir_mm + 0.5f) : (dist_iir_mm - 0.5f));
     }
 
+#if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS
     printf(
         "[TWR][TAG][DIST] AID=0x%04X SN=%u raw=%ld q=%ld clean_med=%ld iir=%ld mm\r\n",
         (unsigned int)anchor_id,
@@ -290,13 +298,10 @@ void twr_dist_filter_update_and_log_mm_ex(uint16_t anchor_id,
         med_l,
         iir_l
     );
+#endif
 
-    // Ground-truth error stats (fixed jig): update only when we have valid med/iir.
+    // Ground-truth error stats (fixed jig): update only when we have valid filtered results.
     if (quality_ok && used_for_filter && (med_l >= 0L) && (iir_l >= 0L)) {
-        twr_gt_stats_update((uint32_t)raw_l, (uint32_t)med_l, (uint32_t)iir_l);
-    }
-    // Ground-truth error stats (fixed jig): update only when we actually used the sample.
-    if (quality_ok && (med_l >= 0L) && (iir_l >= 0L)) {
         twr_gt_stats_update((uint32_t)raw_l, (uint32_t)med_l, (uint32_t)iir_l);
     }
 }

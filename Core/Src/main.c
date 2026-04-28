@@ -53,10 +53,14 @@
 #include <stdlib.h>
 #include <math.h>
 
-// ===== 튜닝 파라미터 =====
+// ===== ??뺣뻼 ???뵬沃섎챸苑?=====
 #define POLL_TX_TO_RESP_RX_DLY_UUS 900
-#define RESP_RX_TIMEOUT_UUS         1600  
+#define RESP_RX_TIMEOUT_UUS         1500  
 #define POLL_RX_TO_RESP_TX_DLY_UUS   1400   
+
+// ===== DS-TWR Additional Timing =====
+#define RESP_RX_TO_FINAL_TX_DLY_UUS  1500   // TAG: delay from RESP RX to FINAL TX (reduced from 3000)
+#define FINAL_RX_TIMEOUT_UUS         8000   // ANCHOR: timeout waiting for FINAL (bumped from 5000 for mixed-UWB window margin)
 
 #define TX_ANT_DLY 16385
 #define RX_ANT_DLY 16385
@@ -65,13 +69,62 @@
 // ===== Operations Tuning =====
 #define ANCHOR_LINK_TIMEOUT_MS  5000U  // Initial threshold for "Lost" state (ms)
 #define ANCHOR_LOST_LOG_MS      5000U  // Interval for "Still Lost" reminders (ms)
-#define TAG_RANGING_RATE_HZ   6U    // Target Frequency (Full Scans per second)
-#define TAG_ANCHOR_SLOT_MS    20U    // Per-anchor baseline budget (includes retries)
+#define ANCHOR_LP_TIMEOUT_MS   60000U  // Time before entering Low Power Listen (ms)
+#define TAG_RANGING_RATE_HZ    6U    // Target Frequency (Full Scans per second)
+#define TAG_ANCHOR_SLOT_MS    55U    // Per-anchor baseline budget (includes retries)
 #define TAG_MIN_GAP_MS         2U    // Safety floor between scans (ms)
+#define TAG_SLOT2_GUARD_US   10000U   // [TEST] Decisive 10ms guard delay before Slot 2 poll
+#define TAG_SLOT3_GUARD_US   10000U   // [TEST] Decisive 10ms guard delay before Slot 3 poll
+#define ANCHOR_LP_WAKE_INTERVAL_MS  1000U // Duty cycle period (ms)
+#define ANCHOR_LP_LISTEN_WINDOW_MS   100U // Active RX window (ms)
 
+#define TAG_SYS_STATUS_HYGIENE_BIT_MASK (SYS_STATUS_TXFRS_BIT_MASK | \
+                                          SYS_STATUS_RXFCG_BIT_MASK | \
+                                          SYS_STATUS_ALL_RX_TO      | \
+                                          SYS_STATUS_ALL_RX_ERR     | \
+                                          SYS_STATUS_AFFREJ_BIT_MASK)
 
+/* ANCHOR Status Hygiene: Complete bitmask to ensure cold-start for every wait-for-POLL scan */
+#define ANC_SYS_STATUS_HYGIENE_BIT_MASK (SYS_STATUS_TXFRS_BIT_MASK | \
+                                          SYS_STATUS_RXFCG_BIT_MASK | \
+                                          SYS_STATUS_ALL_RX_ERR     | \
+                                          SYS_STATUS_ALL_RX_TO      | \
+                                          SYS_STATUS_AFFREJ_BIT_MASK)
 
+#ifndef UWB_ONE_WAY_BENCHMARK
+#define UWB_ONE_WAY_BENCHMARK 0
+#endif
+ 
+#ifndef UWB_ONE_WAY_BENCHMARK_HZ
+#define UWB_ONE_WAY_BENCHMARK_HZ 6U
+#endif
+ 
+#ifndef DS_RUNTIME_QUIET_MEASURE
+#define DS_RUNTIME_QUIET_MEASURE 0
+#endif
+ 
+#ifndef DS_RUNTIME_TRACK_CLEAN_CEILING
+#define DS_RUNTIME_TRACK_CLEAN_CEILING 1
+#endif
 
+#ifndef DS_RUNTIME_INSTRUMENTATION
+#define DS_RUNTIME_INSTRUMENTATION 0
+#endif
+
+#ifndef DS_BOUNDED_SCHEDULER
+#define DS_BOUNDED_SCHEDULER 0
+#endif
+
+#ifndef DS_ANCHOR_OBS_SUMMARY
+#define DS_ANCHOR_OBS_SUMMARY 0
+#endif
+ 
+typedef enum {
+    ANCHOR_STATE_ACTIVE = 0,
+    ANCHOR_STATE_LINK_LOST,
+    ANCHOR_STATE_LOW_POWER_LISTEN,
+    ANCHOR_STATE_DEEP_SLEEP
+} anchor_runtime_state_t;
 
 #define TWR_FP_MAX_GAP_Q6 200
 #define FP_GAP_MAX_SAMP 12U
@@ -82,8 +135,8 @@
 #define TWR_QUAL_MIN_SNR    7U
 #define TWR_QUAL_MIN_MP     50U
 
-// ===== 기타 파라미터 =====
-#define RESP_TS_ADJ_UNITS  0   // 프레임에 넣는 resp_tx_ts 보정치(유닛)
+// ===== 疫꿸퀬? ???뵬沃섎챸苑?=====
+#define RESP_TS_ADJ_UNITS  0   // ?袁⑥쟿?袁⑸퓠 ?節뗫뮉 resp_tx_ts 癰귣똻?숂㎉??醫딅뻺)
 #define RXFLEN_MASK    0x0000007FUL    /* Receive Frame Length (0 to 127) */
 
 // system_config_t is now replaced by uwb_cfg_t provided in uwb_cfg.h
@@ -260,6 +313,12 @@
   #define THIS_ROLE_STR   "UNK"
 #endif
 
+#define DS_TWR_VERBOSE 0
+
+#ifndef TAG_VERBOSE_LOGS
+#define TAG_VERBOSE_LOGS 0
+#endif
+
 /* USER CODE END Includes */
 void Error_Handler(void);
 
@@ -270,23 +329,22 @@ void Error_Handler(void);
 
 // twr_quality_t is now provided by uwb_quality.h
 
-// TAG 쪽에서 사용하는 전역 필터 상태 (앵커별 분리)
+// TAG 筌잛럩肉???????롫뮉 ?袁⑸열 ?袁り숲 ?怨밴묶 (???묽癰??브쑬??
 #ifndef NUM_OF_ANCHORS
 #define NUM_OF_ANCHORS 3U
 #endif
 static twr_dist_filter_t g_twr_dist_filter_by_anchor[NUM_OF_ANCHORS];
 
-// anchor_id -> per-anchor filter 매핑 (구현은 g_sys_cfg 선언 이후에 정의)
+// anchor_id -> per-anchor filter 筌띲끋釉?(?닌뗭겱?? g_sys_cfg ?醫롫섧 ??꾩뜎???類ㅼ벥)
 static int8_t twr_anchor_slot_from_id(uint16_t anchor_id);
 twr_dist_filter_t* twr_get_filter_by_anchor(uint16_t anchor_id);
 
-// 내부용: 필터 상태 초기화
-
+// ????? ?袁り숲 ?怨밴묶 ?λ뜃由??
 // Filter functions (twr_reason_add, twr_dist_filter_push, twr_dist_filter_compute_median_and_mean,
 // twr_dist_filter_update_and_log_mm_ex, twr_dist_filter_update_and_log_mm, twr_gt_stats_*)
 // are now provided by uwb_filter.c
 
-// 앱 초기화 시 한 번 호출 (g_twr_dist_filter_by_anchor는 main.c 로컬)
+// ???λ뜃由??????甕??紐꾪뀱 (g_twr_dist_filter_by_anchor??main.c 嚥≪뮇類?
 void twr_dist_filter_init(void)
 {
     for (uint8_t i = 0U; i < NUM_OF_ANCHORS; i++) {
@@ -308,7 +366,6 @@ void twr_dist_filter_init(void)
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
-
 
 /* USER CODE BEGIN PV */
 
@@ -337,7 +394,6 @@ uint64_t get_rx_timestamp_u64(void)
     }
     return ts;
 }
-/* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
@@ -399,15 +455,15 @@ static inline void micros_delay(uint32_t us)
     const uint32_t start = micros();
     while ((uint32_t)(micros() - start) < us) {
         // busy-wait
-        // 필요하면 전력/인터럽트 친화적으로:
+        // ?袁⑹뒄??롢늺 ?袁⑥젾/?紐낃숲????燁살뮉??怨몄몵嚥?
         // __NOP();
-        // 또는 __WFI();  (단, 인터럽트가 주기적으로 들어오는 환경에서만 추천)
+        // ?癒?뮉 __WFI();  (?? ?紐낃숲???껃첎? 雅뚯눊由?怨몄몵嚥???쇰선??삳뮉 ??띻펾?癒?퐣筌??곕뗄荑?
     }
 }
 
 /* ===== DW3000 pin mapping ===== */
-#define DW3000_CS_PORT     UWB_SPI_CS_GPIO_Port
-#define DW3000_CS_PIN      UWB_SPI_CS_Pin
+#define DW3000_CS_PORT     UWB_SPI1_CS_GPIO_Port
+#define DW3000_CS_PIN      UWB_SPI1_CS_Pin
 
 #define DW3000_RST_PORT    UWB_RESET_GPIO_Port
 #define DW3000_RST_PIN     UWB_RESET_Pin
@@ -417,7 +473,7 @@ static void dw3000_reset(void)
 {
     /* Active-low reset (open-drain) */
     HAL_GPIO_WritePin(DW3000_RST_PORT, DW3000_RST_PIN, GPIO_PIN_RESET);
-    HAL_Delay(2);   // ≥1 ms
+    HAL_Delay(2);   // ?? ms
     HAL_GPIO_WritePin(DW3000_RST_PORT, DW3000_RST_PIN, GPIO_PIN_SET);
     HAL_Delay(2);
 }
@@ -488,7 +544,7 @@ void stm32_get_eui64(uint8_t eui[8])
     uint32_t uid1 = *(uint32_t *)(UID_BASE + 0x04);
     uint32_t uid2 = *(uint32_t *)(UID_BASE + 0x08);
 
-    /* DW3000은 보통 little endian EUI 사용 */
+    /* DW3000?? 癰귣똾??little endian EUI ????*/
     eui[0] = (uid0 >>  0) & 0xFF;
     eui[1] = (uid0 >>  8) & 0xFF;
     eui[2] = (uid0 >> 16) & 0xFF;
@@ -653,7 +709,7 @@ static inline void get_ts4(const uint8_t *src4, uint32_t *lo32) {
           ((uint32_t)src4[1] << 8)  |  (uint32_t)src4[0];
 }
 
-// Δ1: TWR 통계 구조체 및 전역 변수
+// TWR stats and counters.
 typedef struct {
     uint32_t rx_ok;
     uint32_t rx_err;
@@ -678,7 +734,7 @@ static twr_stats_t g_anc_stat;
 static uint32_t g_affrej_window_ms = 0U;
 static uint32_t g_affrej_window_cnt = 0U;
 
-// Δ1: STAT 로그 출력 (1초 주기) - 구현
+// ?1: STAT 嚥≪뮄???곗뮆??(1??雅뚯눊由? - ?닌뗭겱
 static void twr_stats_maybe_print(const char* prefix, twr_stats_t* s)
 {
     uint32_t now = HAL_GetTick();
@@ -837,11 +893,11 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
 
             dwt_readrxdata(rx_buf, flen, 0);
 
-            // RESP 수신 후
+            // RESP received.
             uint8_t resp_sn = rx_buf[ALL_MSG_SN_IDX];
 
-            // memcmp 기반 hdr_ok 제거 (포맷 전환 중 깨지기 쉬움)
-            // 최소 필드 검증으로 대체: FC + RESP type
+            // memcmp 疫꿸퀡而?hdr_ok ??볤탢 (?????袁れ넎 餓?繹먥뫁?疫????)
+            // 筌ㅼ뮇???袁⑤굡 野꺜筌앹빘?앮에???筌? FC + RESP type
             bool fc_ok = (flen > 1 && rx_buf[0] == 0x41 && rx_buf[1] == 0x88);
             bool type_ok = (flen > RESP_TYPE_IDX && rx_buf[RESP_TYPE_IDX] == 0xE1);
 
@@ -886,14 +942,14 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
 
             long dist_mm = 0L;
             if (dist > 0.0) {
-                double dist_mm_d = dist * 1000.0;   // m → mm
+                double dist_mm_d = dist * 1000.0;   // m ??mm
                 if (dist_mm_d > 2147483647.0) {
                     dist_mm_d = 2147483647.0;
                 }
                 dist_mm = (int32_t)dist_mm_d;
             }
 
-            // Δ2: dist_mm 계산 완료 후, 즉시 diagnostics 읽기
+            // ?2: dist_mm ?④쑴沅??袁⑥┷ ?? 筌앸맩??diagnostics ??꾨┛
             dwt_rxdiag_t diag;
             memset(&diag, 0, sizeof(diag));
             dwt_readdiagnostics(&diag);
@@ -911,10 +967,10 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
             }
 
 
-            // Δ2: DIAG sanity check
+            // ?2: DIAG sanity check
             bool diag_ok = twr_diag_is_sane(&diag);
 
-            // Δ2: 품질 점수 계산
+            // ?2: ??됱춳 ?癒?땾 ?④쑴沅?
             twr_quality_t q = twr_quality_from_diag(&diag);
 
 
@@ -938,7 +994,7 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
                            (unsigned int)q.cir_pwr_raw, (unsigned long)diag.ipatovPower);
                 }
             }
-// FP gap 게이트 계산 (diag_ok일 때만)
+// FP gap 野껊슣????④쑴沅?(diag_ok?????춸)
             bool fp_ok = true;
             uint32_t fp_gap_abs_q6_u32 = 0;
             int32_t fp_gap_q6_s = 0;
@@ -980,7 +1036,7 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
 
             }
 
-            // gate 계산에 필요한 정수값 구성 (앵커별 필터 상태 참조)
+            // gate ?④쑴沅???袁⑹뒄???類ㅻ땾揶??닌딄쉐 (???묽癰??袁り숲 ?怨밴묶 筌〓챷??
             twr_dist_filter_t *af = twr_get_filter_by_anchor(dst_short);
 
             long dist_raw_mm_l = (long)(dist_mm + 0.5f);
@@ -994,7 +1050,7 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
                 filt_samples = af->count;
             }
 
-            // gap_q6를 uint16_t로 변환 (절댓값) - q_weight 입력용
+            // Clamp gap_q6 to the quality-weight input range.
             uint16_t gap_q6_u16 = (uint16_t)((fp_gap_abs_q6_u32 > 65535U) ? 65535U : fp_gap_abs_q6_u32);
 
             const char *qw_reason = NULL;
@@ -1012,9 +1068,9 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
                         // -----------------------------------------------------------------
             // Quality gating policy (FINAL)
             //
-            // ✅ Do NOT fail solely due to low RSSI.
+            // ??Do NOT fail solely due to low RSSI.
             //    - RSSI is treated as a *warning* only (logged in reason).
-            // ✅ Hard fail conditions:
+            // ??Hard fail conditions:
             //    - diag_ok == true
             //    - fp_ok   == true
             //    - snr_score >= TWR_QUAL_MIN_SNR
@@ -1076,7 +1132,6 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
             //         (unsigned long)(micros() - t_poll_begin_us),
             //         (unsigned long)(micros() - t_start),
             //         (unsigned long)st);
-            // 기존처럼 클리어
             dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_ALL_RX_ERR | SYS_STATUS_ALL_RX_TO);
 
         }
@@ -1456,13 +1511,13 @@ static void uwb_print_radio_params_3lines(void)
 {
     static uint16_t g_tx_antd_set = (uint16_t)TX_ANT_DLY;
     static uint16_t g_rx_antd_set = (uint16_t)RX_ANT_DLY;
-    // (1) ANTD: readback (실제 적용값)
+    // (1) ANTD: readback (??쇱젫 ?怨몄뒠揶?
     {
         printf("[UWB][ANTD] tx_ant_dly=%u rx_ant_dly=%u\r\n",
                (unsigned)g_tx_antd_set, (unsigned)g_rx_antd_set);
     }
 
-    // (2) CFG: 지금 코드 구조상 uwb_lib_cfg(NULL) -> default_config가 적용됨
+    // (2) CFG: print the default radio configuration applied by uwb_lib_cfg(NULL).
     {
         const dwt_config_t *c = &default_config;
         printf("[UWB][CFG] chan=%u plen=%u pac=%u txCode=%u rxCode=%u sfdType=%u dr=%u phrMode=%u phrRate=%u stsMode=%u stsLen=%u pdoa=%u sfdTO=%u\r\n",
@@ -1481,12 +1536,12 @@ static void uwb_print_radio_params_3lines(void)
                (unsigned)c->sfdTO);
     }
 
-    // (3) CLK: 32-bit safe ppm 근사 (64-bit/LL 금지)
+    // (3) CLK: 32-bit safe ppm 域뱀눘沅?(64-bit/LL 疫뀀뜆?)
     {
         int16_t clk_off = (int16_t)dwt_readclockoffset();
 
-        // ppm ≈ clk_off * (1e6 / 2^26) = clk_off * (15625 / 2^20)
-        // 최대값: 32767 * 15625 = 511,984,375 (32-bit signed 안전)
+        // ppm ??clk_off * (1e6 / 2^26) = clk_off * (15625 / 2^20)
+        // 筌ㅼ뮆?揶? 32767 * 15625 = 511,984,375 (32-bit signed ??됱읈)
         int32_t prod = (int32_t)clk_off * (int32_t)15625;
         // rounding: +/- 0.5 LSB
         if (prod >= 0) prod += (1 << 19);
@@ -1501,11 +1556,11 @@ static void uwb_print_radio_params_3lines(void)
 
 static void apply_uwb_cfg(uwb_cfg_t *cfg)
 {
-    // Step 1: Radio PHY config — restore known-good uwb_lib_cfg(NULL) path
+    // Step 1: Radio PHY config ??restore known-good uwb_lib_cfg(NULL) path
     // This calls dwt_configure(&default_config) + dwt_configuretxrf(&txconfig_ch5)
     uwb_lib_cfg(NULL);
 
-    // Step 2: MAC config — from known-good set_uwb_cfg()
+    // Step 2: MAC config ??from known-good set_uwb_cfg()
     stm32_get_eui64(g_eui);
     dwt_seteui(g_eui);
     dwt_setpanid(cfg->pan_id);

@@ -38,3 +38,14 @@ Current Status: `Patched / Ready for bring-up`
 - **Result: FAIL**. Primary cause: cfg.bin persistence 미연결로 4대 모두 TAG fallback. Smoke 조건 미성립.
 - **Secondary (보류)**: ANC1/ANC3 Device ID anomaly — role dispatch 정상화 후 재확인.
 - **다음 액션**: cfg.bin persistence / role dispatch parity 복구.
+
+### Phase 8: Bulk Runtime Transplant from Reference Repo (Completed)
+- [x] Create branch `ioc-shell-bulk-runtime-port`.
+- [x] Import validated source runtime logic into target `main.c` while preserving target CubeMX init and clock configuration.
+- [x] Import/update `uwb_cfg`, `uwb_filter`, `uwb_quality`, selected DW3000 driver files, delivery configs, cfg presets, and provisioning/check tooling.
+- [x] Adapt DW3000 mapping to target IOC pin symbols: CS=`UWB_SPI1_CS` PA4, RESET=`UWB_RESET` PA15, SPI=`hspi1`, printf UART=`hlpuart1`.
+- [x] Restore cfg persistence / role dispatch path using `cfg.bin` at `0x0807F800`.
+- [x] Verify Debug build.
+- **Result: PASS**. `cmake --preset Debug` and `cmake --build build/Debug` completed successfully.
+- **Artifacts**: `build/Debug/stm32-dw3000-g474re-ioc-shell.elf`, `.bin`, `.hex`; delivery copies refreshed as `delivery/firmware.bin` and `delivery/firmware.hex`.
+- **Next**: hardware flash not performed in this phase; run cfg-specific SS/DS UART smoke verification next.
