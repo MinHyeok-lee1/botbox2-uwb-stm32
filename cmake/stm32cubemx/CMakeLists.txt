@@ -58,6 +58,7 @@ foreach(extra_src
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/uwb_filter.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/uwb_quality.c
     ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/uwb_cfg.c
+    ${CMAKE_CURRENT_SOURCE_DIR}/../../Core/Src/can_controller.c
 )
     if(EXISTS ${extra_src})
         list(APPEND MX_Application_Src ${extra_src})
