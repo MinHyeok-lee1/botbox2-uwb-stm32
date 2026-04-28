@@ -49,3 +49,14 @@ Current Status: `Patched / Ready for bring-up`
 - **Result: PASS**. `cmake --preset Debug` and `cmake --build build/Debug` completed successfully.
 - **Artifacts**: `build/Debug/stm32-dw3000-g474re-ioc-shell.elf`, `.bin`, `.hex`; delivery copies refreshed as `delivery/firmware.bin` and `delivery/firmware.hex`.
 - **Next**: hardware flash not performed in this phase; run cfg-specific SS/DS UART smoke verification next.
+
+### Phase 9: cfg-based SS-TWR Hardware Smoke Verification (Completed)
+- [x] Provision 4 boards with unique `cfg.bin` using `tools/provision.ps1`.
+- [x] Capture UART logs for TAG and 3 ANCHORs.
+- [x] Verify cfg load and role dispatch (TAG, ANCHOR 1, 2, 3).
+- [x] Verify DW3000 device ID on all boards.
+- [x] Verify SS-TWR 1:3 smoke test results (ok=3/3, stable cycle).
+- **Result: PASS**. All anchors responding to TAG; Ranging logic fully functional in IOC-shell.
+- **Log Path**: `artifacts/ioc_shell_ss_smoke/20260428-1751/`
+- **Next**: Phase 10: DS-TWR cfg-based smoke verification.
+
