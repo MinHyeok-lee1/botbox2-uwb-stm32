@@ -60,3 +60,11 @@ Current Status: `Patched / Ready for bring-up`
 - **Log Path**: `artifacts/ioc_shell_ss_smoke/20260428-1751/`
 - **Next**: Phase 10: DS-TWR cfg-based smoke verification.
 
+### Phase 10: cfg-based DS-TWR Hardware Smoke Verification (Completed)
+- [x] Provision 4 boards with DS-specific `cfg.bin` using `tools/provision.ps1`.
+- [x] Capture UART logs for TAG and 3 ANCHORs (60s+).
+- [x] Verify cfg load and DS mode entry (`Mode (SS/DS): 1`).
+- [x] Verify DS-TWR 1:3 smoke test results (`ok=3/3`, `overrun=0`).
+- **Result: PASS**. Stable 1:3 DS-TWR ranging confirmed.
+- **Log Path**: `artifacts/ioc_shell_ds_smoke/20260428-1822/`
+- **Next**: Phase 11: Long-term stability verification.
