@@ -30,3 +30,11 @@ Current Status: `Patched / Ready for bring-up`
 - [x] Execute clean build in the repository root using CMake presets.
 - [x] Verify successful compilation and linking without modifying source files.
 - [x] Document build verification results.
+
+### Phase 7: IOC-shell Flash/UART + SS/DS TWR Smoke Verification (Failed)
+- [x] Flash firmware to TAG (`004500403234511137333934`) and 3 ANCHORs.
+- [x] Capture and analyze UART boot and runtime logs.
+- [ ] Verify SS-TWR/DS-TWR smoke test.
+- **Result: FAIL**. Primary cause: cfg.bin persistence 미연결로 4대 모두 TAG fallback. Smoke 조건 미성립.
+- **Secondary (보류)**: ANC1/ANC3 Device ID anomaly — role dispatch 정상화 후 재확인.
+- **다음 액션**: cfg.bin persistence / role dispatch parity 복구.
