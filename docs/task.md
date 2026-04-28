@@ -68,3 +68,10 @@ Current Status: `Patched / Ready for bring-up`
 - **Result: PASS**. Stable 1:3 DS-TWR ranging confirmed.
 - **Log Path**: `artifacts/ioc_shell_ds_smoke/20260428-1822/`
 - **Next**: Phase 11: Long-term stability verification.
+### Phase 10B: IOC-shell Migration Success Checkpoint (Completed)
+- [x] Consolidate Phase 8~10 results into a migration success report.
+- [x] Verify preservation of target `.ioc` and pinmap authority.
+- [x] Document core success evidence (cfg load, role dispatch, 1:3 smoke PASS).
+- **Result: PASS**. Migration functionally validated.
+- **Checkpoint Document**: `docs/antigravity/analysis/2026-04-28-ioc-shell-migration-success-checkpoint.md`
+- **Next**: Phase 11: Long-term stability verification.
