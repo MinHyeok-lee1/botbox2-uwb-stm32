@@ -1,0 +1,479 @@
+[TWR][TIM][ANC][RESP_TX] SN=181 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=184 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=187 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=190 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=193 dt=1326
+[ANC][STAT] rx_ok=48 rx_err=0 rx_affrej=185 rx_to=0 tx_ok=48 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=196 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=199 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=202 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=205 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=208 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=211 dt=1325
+[ANC][STAT] rx_ok=54 rx_err=0 rx_affrej=208 rx_to=0 tx_ok=54 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=214 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=217 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=220 dt=1327
+[TWR][TIM][ANC][RESP_TX] SN=223 dt=1363
+
+[CFG] Flash config loaded successfully. Role: ANCHOR
+
+--- UWB CONFIGURATION ---
+Magic:      0x55574243 [OK]
+Version:    1
+Length:     40
+CRC32:      0x4A1DC0D4 [VALID]
+Role:       ANCHOR
+PAN ID:     0x2001
+Short Addr: 0x2003
+Mode (SS/DS): 1
+Filter Pro: 1
+Comm Mode:  0
+Anchors:    3 configured
+  AID[0]:   0x2001
+  AID[1]:   0x2002
+  AID[2]:   0x2003
+-------------------------
+[STEP3] Device id: 0x00000000
+[UWB][ANTD] tx_ant_dly=16385 rx_ant_dly=16385
+[UWB][CFG] chan=5 plen=5 pac=0 txCode=9 rxCode=9 sfdType=1 dr=1 phrMode=0 phrRate=0 stsMode=0 stsLen=1 pdoa=0 sfdTO=129
+[UWB][CLK] clk_off=0 ppm=0
+[STEP3] apply_uwb_cfg done
+[MAIN] Starting RX application (ANCHOR)
+[RX][APP] Starting RX application
+[TWR][TIM][ANC][RESP_TX] SN=17 dt=1325
+[ANC][STAT] rx_ok=1 rx_err=0 rx_affrej=1 rx_to=0 tx_ok=1 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=20 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=23 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=26 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=29 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=32 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=35 dt=1326
+[ANC][STAT] rx_ok=7 rx_err=0 rx_affrej=24 rx_to=0 tx_ok=7 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=38 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=41 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=44 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=47 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=50 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=53 dt=1326
+[ANC][STAT] rx_ok=13 rx_err=0 rx_affrej=47 rx_to=0 tx_ok=13 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=56 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=59 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=62 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=65 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=68 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=71 dt=1326
+[ANC][STAT] rx_ok=19 rx_err=0 rx_affrej=70 rx_to=0 tx_ok=19 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=74 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=77 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=80 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=83 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=86 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=89 dt=1326
+[ANC][STAT] rx_ok=25 rx_err=0 rx_affrej=93 rx_to=0 tx_ok=25 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=92 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=95 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=98 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=101 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=104 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=107 dt=1326
+[ANC][STAT] rx_ok=31 rx_err=0 rx_affrej=116 rx_to=0 tx_ok=31 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=110 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=113 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=116 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=119 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=122 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=125 dt=1326
+[ANC][STAT] rx_ok=37 rx_err=0 rx_affrej=139 rx_to=0 tx_ok=37 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=128 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=131 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=134 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=137 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=140 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=143 dt=1326
+[ANC][STAT] rx_ok=43 rx_err=1 rx_affrej=161 rx_to=0 tx_ok=43 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=146 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=149 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=152 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=155 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=158 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=161 dt=1326
+[ANC][STAT] rx_ok=49 rx_err=1 rx_affrej=184 rx_to=0 tx_ok=49 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=164 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=167 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=170 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=173 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=176 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=179 dt=1326
+[ANC][STAT] rx_ok=55 rx_err=1 rx_affrej=207 rx_to=0 tx_ok=55 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=182 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=185 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=188 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=191 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=194 dt=1327
+[TWR][TIM][ANC][RESP_TX] SN=197 dt=1363
+[ANC][STAT] rx_ok=61 rx_err=1 rx_affrej=230 rx_to=0 tx_ok=61 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=200 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=203 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=206 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=209 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=212 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=215 dt=1325
+[ANC][STAT] rx_ok=67 rx_err=1 rx_affrej=253 rx_to=0 tx_ok=67 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=218 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=221 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=224 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=227 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=230 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=233 dt=1363
+[ANC][STAT] rx_ok=73 rx_err=1 rx_affrej=276 rx_to=0 tx_ok=73 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=236 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=239 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=242 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=245 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=248 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=251 dt=1325
+[ANC][STAT] rx_ok=79 rx_err=1 rx_affrej=299 rx_to=0 tx_ok=79 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=254 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=1 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=4 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=7 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=10 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=13 dt=1364
+[ANC][STAT] rx_ok=85 rx_err=1 rx_affrej=322 rx_to=0 tx_ok=85 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=16 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=19 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=22 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=25 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=28 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=31 dt=1326
+[ANC][STAT] rx_ok=91 rx_err=1 rx_affrej=345 rx_to=0 tx_ok=91 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=34 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=37 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=40 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=43 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=46 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=49 dt=1325
+[ANC][STAT] rx_ok=97 rx_err=1 rx_affrej=368 rx_to=0 tx_ok=97 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=52 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=55 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=58 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=61 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=64 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=67 dt=1326
+[ANC][STAT] rx_ok=103 rx_err=1 rx_affrej=391 rx_to=0 tx_ok=103 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=70 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=73 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=76 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=79 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=82 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=85 dt=1326
+[ANC][STAT] rx_ok=109 rx_err=1 rx_affrej=414 rx_to=0 tx_ok=109 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=88 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=91 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=94 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=97 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=100 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=103 dt=1363
+[ANC][STAT] rx_ok=115 rx_err=1 rx_affrej=437 rx_to=0 tx_ok=115 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=106 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=109 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=112 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=115 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=118 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=121 dt=1326
+[ANC][STAT] rx_ok=121 rx_err=1 rx_affrej=460 rx_to=0 tx_ok=121 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=124 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=127 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=130 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=133 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=136 dt=1327
+[TWR][TIM][ANC][RESP_TX] SN=139 dt=1325
+[ANC][STAT] rx_ok=127 rx_err=1 rx_affrej=483 rx_to=0 tx_ok=127 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=142 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=145 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=148 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=151 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=154 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=157 dt=1363
+[ANC][STAT] rx_ok=133 rx_err=1 rx_affrej=506 rx_to=0 tx_ok=133 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=160 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=163 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=166 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=169 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=172 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=175 dt=1325
+[ANC][STAT] rx_ok=139 rx_err=1 rx_affrej=529 rx_to=0 tx_ok=139 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=178 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=181 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=184 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=187 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=190 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=193 dt=1326
+[ANC][STAT] rx_ok=145 rx_err=1 rx_affrej=552 rx_to=0 tx_ok=145 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=196 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=199 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=202 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=205 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=208 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=211 dt=1326
+[ANC][STAT] rx_ok=151 rx_err=1 rx_affrej=575 rx_to=0 tx_ok=151 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=214 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=217 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=220 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=223 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=226 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=229 dt=1326
+[ANC][STAT] rx_ok=157 rx_err=1 rx_affrej=598 rx_to=0 tx_ok=157 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=232 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=235 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=238 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=241 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=244 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=247 dt=1363
+[ANC][STAT] rx_ok=163 rx_err=1 rx_affrej=621 rx_to=0 tx_ok=163 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=250 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=253 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=0 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=3 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=6 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=9 dt=1326
+[ANC][STAT] rx_ok=169 rx_err=1 rx_affrej=644 rx_to=0 tx_ok=169 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=12 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=15 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=18 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=21 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=24 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=27 dt=1326
+[ANC][STAT] rx_ok=175 rx_err=1 rx_affrej=667 rx_to=0 tx_ok=175 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=30 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=33 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=36 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=39 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=42 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=45 dt=1326
+[ANC][STAT] rx_ok=181 rx_err=1 rx_affrej=690 rx_to=0 tx_ok=181 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=48 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=51 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=54 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=57 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=60 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=63 dt=1326
+[ANC][STAT] rx_ok=187 rx_err=1 rx_affrej=713 rx_to=0 tx_ok=187 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=66 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=69 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=72 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=75 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=78 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=81 dt=1325
+[ANC][STAT] rx_ok=193 rx_err=1 rx_affrej=736 rx_to=0 tx_ok=193 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=84 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=87 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=90 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=93 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=96 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=99 dt=1326
+[ANC][STAT] rx_ok=199 rx_err=1 rx_affrej=759 rx_to=0 tx_ok=199 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=102 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=105 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=108 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=111 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=114 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=117 dt=1326
+[ANC][STAT] rx_ok=205 rx_err=1 rx_affrej=782 rx_to=0 tx_ok=205 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=120 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=123 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=126 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=129 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=132 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=135 dt=1326
+[ANC][STAT] rx_ok=211 rx_err=1 rx_affrej=805 rx_to=0 tx_ok=211 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=138 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=141 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=144 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=147 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=150 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=153 dt=1326
+[ANC][STAT] rx_ok=217 rx_err=1 rx_affrej=828 rx_to=0 tx_ok=217 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=156 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=159 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=162 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=165 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=168 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=171 dt=1326
+[ANC][STAT] rx_ok=223 rx_err=1 rx_affrej=851 rx_to=0 tx_ok=223 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=174 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=177 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=180 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=183 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=186 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=189 dt=1326
+[ANC][STAT] rx_ok=229 rx_err=1 rx_affrej=874 rx_to=0 tx_ok=229 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=192 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=195 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=198 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=201 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=204 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=207 dt=1327
+[ANC][STAT] rx_ok=235 rx_err=1 rx_affrej=897 rx_to=0 tx_ok=235 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=210 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=213 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=216 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=219 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=222 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=225 dt=1363
+[ANC][STAT] rx_ok=241 rx_err=1 rx_affrej=920 rx_to=0 tx_ok=241 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=228 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=231 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=234 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=237 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=240 dt=1327
+[TWR][TIM][ANC][RESP_TX] SN=243 dt=1326
+[ANC][STAT] rx_ok=247 rx_err=1 rx_affrej=943 rx_to=0 tx_ok=247 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=246 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=249 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=252 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=255 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=2 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=5 dt=1326
+[ANC][STAT] rx_ok=253 rx_err=1 rx_affrej=966 rx_to=0 tx_ok=253 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=8 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=11 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=14 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=17 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=20 dt=1362
+[TWR][TIM][ANC][RESP_TX] SN=23 dt=1326
+[ANC][STAT] rx_ok=259 rx_err=1 rx_affrej=989 rx_to=0 tx_ok=259 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=26 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=29 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=32 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=35 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=38 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=41 dt=1363
+[ANC][STAT] rx_ok=265 rx_err=1 rx_affrej=1012 rx_to=0 tx_ok=265 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=44 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=47 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=50 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=53 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=56 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=59 dt=1363
+[ANC][STAT] rx_ok=271 rx_err=1 rx_affrej=1035 rx_to=0 tx_ok=271 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=62 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=65 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=68 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=71 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=74 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=77 dt=1326
+[ANC][STAT] rx_ok=277 rx_err=1 rx_affrej=1058 rx_to=0 tx_ok=277 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=80 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=83 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=86 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=89 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=92 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=95 dt=1325
+[ANC][STAT] rx_ok=283 rx_err=1 rx_affrej=1081 rx_to=0 tx_ok=283 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=98 dt=1364
+[TWR][TIM][ANC][RESP_TX] SN=101 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=104 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=107 dt=1362
+[TWR][TIM][ANC][RESP_TX] SN=110 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=113 dt=1325
+[ANC][STAT] rx_ok=289 rx_err=1 rx_affrej=1104 rx_to=0 tx_ok=289 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=116 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=119 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=122 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=125 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=128 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=131 dt=1325
+[ANC][STAT] rx_ok=295 rx_err=1 rx_affrej=1127 rx_to=0 tx_ok=295 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=134 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=137 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=140 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=143 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=146 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=149 dt=1364
+[ANC][STAT] rx_ok=301 rx_err=1 rx_affrej=1150 rx_to=0 tx_ok=301 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=152 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=155 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=158 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=161 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=164 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=167 dt=1326
+[ANC][STAT] rx_ok=307 rx_err=1 rx_affrej=1173 rx_to=0 tx_ok=307 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=170 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=173 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=176 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=179 dt=1327
+[TWR][TIM][ANC][RESP_TX] SN=182 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=185 dt=1326
+[ANC][STAT] rx_ok=313 rx_err=1 rx_affrej=1196 rx_to=0 tx_ok=313 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=188 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=191 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=194 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=197 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=200 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=203 dt=1327
+[ANC][STAT] rx_ok=319 rx_err=1 rx_affrej=1219 rx_to=0 tx_ok=319 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=206 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=209 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=212 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=215 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=218 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=221 dt=1326
+[ANC][STAT] rx_ok=325 rx_err=1 rx_affrej=1242 rx_to=0 tx_ok=325 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=224 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=227 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=230 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=233 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=236 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=239 dt=1326
+[ANC][STAT] rx_ok=331 rx_err=1 rx_affrej=1265 rx_to=0 tx_ok=331 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=242 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=245 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=248 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=251 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=254 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=1 dt=1326
+[ANC][STAT] rx_ok=337 rx_err=1 rx_affrej=1288 rx_to=0 tx_ok=337 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=4 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=7 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=10 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=13 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=16 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=19 dt=1363
+[ANC][STAT] rx_ok=343 rx_err=1 rx_affrej=1311 rx_to=0 tx_ok=343 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=22 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=25 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=28 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=31 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=34 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=37 dt=1326
+[ANC][STAT] rx_ok=349 rx_err=1 rx_affrej=1334 rx_to=0 tx_ok=349 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=40 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=43 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=46 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=49 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=52 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=55 dt=1326
+[ANC][STAT] rx_ok=355 rx_err=1 rx_affrej=1357 rx_to=0 tx_ok=355 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=58 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=61 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=64 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=67 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=70 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=73 dt=1326
+[ANC][STAT] rx_ok=361 rx_err=1 rx_affrej=1380 rx_to=0 tx_ok=361 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=76 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=79 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=82 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=85 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=88 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=91 dt=1325
+[ANC][STAT] rx_ok=367 rx_err=1 rx_affrej=1403 rx_to=0 tx_ok=367 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
+[TWR][TIM][ANC][RESP_TX] SN=94 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=97 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=100 dt=1326
+[TWR][TIM][ANC][RESP_TX] SN=103 dt=1325
+[TWR][TIM][ANC][RESP_TX] SN=106 dt=1363
+[TWR][TIM][ANC][RESP_TX] SN=109 dt=1325
+[ANC][STAT] rx_ok=373 rx_err=1 rx_affrej=1426 rx_to=0 tx_ok=373 tx_late=0 txfrs_to=0 rx2tx_last_cyc=0 rx2tx_max_cyc=0 bad_pan=0 bad_dst=0
