@@ -1590,22 +1590,7 @@ static void apply_uwb_cfg(uwb_cfg_t *cfg)
 }
 
 /* USER CODE END 0 */
-static void micros_self_test(void)
-{
-    uint32_t t0, t1, d;
 
-    printf("[MICROS][CFG] PSC=%lu ARR=%lu CNT=%lu\r\n",
-           (unsigned long)htim2.Instance->PSC,
-           (unsigned long)htim2.Instance->ARR,
-           (unsigned long)htim2.Instance->CNT);
-
-    t0 = micros();
-    HAL_Delay(100);
-    t1 = micros();
-    d = t1 - t0;
-
-    printf("[MICROS][TEST] 100ms_delay delta=%lu\r\n", (unsigned long)d);
-}
 /**
   * @brief  The application entry point.
   * @retval int

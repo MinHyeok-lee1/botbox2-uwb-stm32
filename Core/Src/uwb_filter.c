@@ -21,6 +21,7 @@ typedef struct {
 
 static twr_gt_stats_t g_twr_gt = {0};
 
+#if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS
 static uint32_t twr_isqrt_u64(uint64_t x)
 {
     uint64_t op = x;
@@ -42,6 +43,7 @@ static uint32_t twr_isqrt_u64(uint64_t x)
     }
     return (uint32_t)res;
 }
+#endif
 
 static void twr_gt_stats_update(uint32_t raw_mm, uint32_t med_mm, uint32_t iir_mm)
 {
@@ -63,7 +65,9 @@ static void twr_gt_stats_update(uint32_t raw_mm, uint32_t med_mm, uint32_t iir_m
     g_twr_gt.sumerr_iir += (int64_t)((int32_t)iir_mm - (int32_t)gt);
 
     if ((TWR_GT_PRINT_EVERY != 0U) && ((g_twr_gt.n % TWR_GT_PRINT_EVERY) == 0U)) {
+#if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS
         const uint32_t n = g_twr_gt.n;
+#endif
 
 #if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS
         const uint32_t mean_raw = (uint32_t)(g_twr_gt.sum_raw / (uint64_t)n);
@@ -252,13 +256,13 @@ void twr_dist_filter_update_and_log_mm_ex(uint16_t anchor_id,
             dist_iir_mm = f->iir_value; // 마지막 IIR 유지
         }
 
+#if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS
         long raw_l_temp = (long)((dist_raw_mm >= 0.0f) ? (dist_raw_mm + 0.5f) : (dist_raw_mm - 0.5f));
         long q_l_temp   = -1L;
         long med_l_temp = -1L;
         long iir_l_temp = (f->iir_initialized != 0U)
             ? (long)((dist_iir_mm >= 0.0f) ? (dist_iir_mm + 0.5f) : (dist_iir_mm - 0.5f)) : -1L;
 
-#if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS
         printf("[TWR][FILT][SKIP] AID=0x%04X SN=%u raw=%ld q=%ld clean_med=%ld iir=%ld reason=%s\r\n",
             (unsigned int)anchor_id,
             (unsigned int)seq,
@@ -266,15 +270,17 @@ void twr_dist_filter_update_and_log_mm_ex(uint16_t anchor_id,
                 q_l_temp,
                 med_l_temp,
                 iir_l_temp,
-                reason_str);
+                quality_fail_reason);
 #endif
             }
 
-    // ===== 로그용 정수 변환(반올림) =====
+    // raw_l: always used for stats update or logging if enabled
     long raw_l = (long)((dist_raw_mm >= 0.0f) ? (dist_raw_mm + 0.5f) : (dist_raw_mm - 0.5f));
 
+#if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS
     // q: 품질 통과면 raw 그대로, 아니면 -1
     long q_l = quality_ok ? raw_l : -1L;
+#endif
 
     // med: quality_ok && used_for_filter일 때만 값, 아니면 -1
     long med_l = -1L;
