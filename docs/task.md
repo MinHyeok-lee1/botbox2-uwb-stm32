@@ -91,3 +91,11 @@ Current Status: `Patched / Ready for bring-up`
 - **Result: READY FOR MERGE**. No blockers found.
 - **Checkpoint Document**: `docs/antigravity/analysis/2026-04-29-ioc-shell-merge-readiness-checkpoint.md`
 - **Next**: Final merge to main.
+### Phase 13: Main post-merge DS-TWR smoke verification (Completed)
+- [x] Provision 4 boards with latest main branch firmware and DS configs.
+- [x] Capture 60s continuous UART logs.
+- [x] Verify cfg load, role dispatch, and 1:3 ranging stability on main.
+- **Result: PASS**. 99.2% success rate, 100% timing stability.
+- **Log Path**: `artifacts/ioc_shell_post_merge_ds_smoke/20260429-1001/`
+- **Report**: `docs/antigravity/analysis/2026-04-29-main-post-merge-ds-smoke-result.md`
+- **Next**: Phase 14: Final cleanup.
