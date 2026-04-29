@@ -1,0 +1,64 @@
+{
+  "preset_id": "SAFE_DS_1T3A_6HZ_BASELINE",
+  "operating_profile": "SAFE",
+  "ranging_mode": "DS_TWR",
+  "topology": "1_TAG_3_ANCHOR",
+  "target_rate_hz": 6,
+  "scheduler_profile": "DEFAULT_STATIC",
+  "validation_status": "VALIDATED_SAFE",
+  "default_for_field_operation": true,
+  "firmware_macro_requirements": {
+    "DS_BOUNDED_SCHEDULER": 0,
+    "DS_ANCHOR_OBS_SUMMARY": 0
+  },
+  "cfg_binary_status": "UNCHANGED",
+  "evidence_scope": "existing_project_baseline",
+  "source_documents": [
+    "README.md",
+    "docs/task.md",
+    "docs/RUNTIME_CONFIG_GUIDE.md",
+    "docs/antigravity/plans/2026-04-24-runtime-preset-catalog-draft.md",
+    "docs/antigravity/plans/2026-04-24-runtime-cfg-schema-extension-proposal.md"
+  ],
+  "evidence": {
+    "observed_logs": [
+      "artifacts/operator_delivery/20260428-1608/tag_com13.log",
+      "artifacts/operator_delivery/20260428-1608/anc1_com10.log",
+      "artifacts/operator_delivery/20260428-1608/anc2_com12.log",
+      "artifacts/operator_delivery/20260428-1608/anc3_com11.log"
+    ],
+    "environment": "operator delivery dry-run on 1 TAG + 3 ANCHOR hardware using delivery firmware and cfg artifacts",
+    "topology": "1_TAG_3_ANCHOR",
+    "pass_condition": "operator dry-run PASS and host-side validation technical status valid with human report PASS",
+    "failure_condition": "provision failure, cfg/role/PAN/address mismatch, missing runtime logs, host validation FAIL/INVALID, or sustained runtime failure",
+    "artifact_paths": [
+      "docs/antigravity/analysis/2026-04-28-field-deployment-dry-run-result.md",
+      "docs/antigravity/analysis/2026-04-28-field-deployment-validation-result.md",
+      "artifacts/results/operator_delivery_20260428-1608/operator_delivery_20260428_1608_manifest.json",
+      "artifacts/results/operator_delivery_20260428-1608/operator_delivery_20260428_1608_report.json",
+      "artifacts/results/operator_delivery_20260428-1608/operator_delivery_20260428_1608_human_report.md"
+    ],
+    "observation_date": "2026-04-28",
+    "operator_notes": "Metadata links the 2026-04-28 operator delivery dry-run and host-side validation artifacts; this is not a new SAFE promotion or baseline revalidation."
+  },
+  "validation": {
+    "host_validation_required": true,
+    "host_validation_report": "artifacts/results/operator_delivery_20260428-1608/operator_delivery_20260428_1608_human_report.md",
+    "json_validated": true,
+    "schema_version": "draft-2026-04-28",
+    "validation_result": "PASS",
+    "validation_notes": "Host validation technical status valid; human report PASS; warnings=0; violations=0; total_tag_multi=346; count_3_of_3=311; ovr_1_count=2."
+  },
+  "approval": {
+    "required_for_safe": true,
+    "approved_by": null,
+    "approved_date": null,
+    "approval_scope": "existing SAFE sidecar baseline metadata",
+    "approval_notes": "No new approval claim added; existing SAFE baseline status is preserved."
+  },
+  "notes": [
+    "이 항목은 기존 SAFE 운영 베이스라인을 sidecar manifest로 기록한다.",
+    "펌웨어 source, timing constant, binary cfg 형식을 변경하지 않는다.",
+    "단계 4B 후보나 bounded polling 경로를 SAFE로 승격하지 않는다."
+  ]
+}

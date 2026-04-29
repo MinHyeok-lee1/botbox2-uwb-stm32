@@ -3,7 +3,7 @@
     STM32-DW3000 UWB Device Provisioning Tool (Windows PowerShell)
 
 .DESCRIPTION
-    This script safely provisions firmware (.bin) and configuration (.bin)
+    This script safely provisions firmware (.bin) and configuration (.bin) 
     to the board using STM32CubeProgrammer CLI.
 
 .PARAMETER Firmware
@@ -22,11 +22,11 @@
     Prints the CLI commands that would be executed without actually writing.
 
 .EXAMPLE
-    .\delivery\tools\provision.ps1 -fw .\delivery\firmware.bin -cfg .\delivery\configs\tag_default.bin
+    .\tools\provision.ps1 -fw firmware.bin -cfg configs\tag_default.bin
     Auto-detects a single probe and provisions both.
 
 .EXAMPLE
-    .\delivery\tools\provision.ps1 -cfg .\delivery\configs\anchor_default.bin -sn 004D003D3234
+    .\tools\provision.ps1 -cfg configs\anchor_default.bin -sn 004D003D3234
     Updates config only for the specified probe.
 #>
 
@@ -50,10 +50,10 @@ param (
 # Constants
 $FW_FLASH_ADDR = "0x08000000"
 $CFG_FLASH_ADDR = "0x0807F800"
-$MAX_FW_SIZE = 510 * 1024   # 522240 bytes
+$MAX_FW_SIZE = 510 * 1024 # 522240 bytes
 $EXPECTED_CFG_SIZE = 40
 
-# Logging
+# Logging function
 function Write-Log {
     param([string]$Message, [ConsoleColor]$Color = "White")
     Write-Host "==> $Message" -ForegroundColor $Color
@@ -61,61 +61,27 @@ function Write-Log {
 
 function Write-ErrorLog {
     param([string]$Message)
-    Write-Host "[ERR] $Message" -ForegroundColor Red
+    Write-Host "[ERR] $Message" -ForegroundColor "Red"
 }
 
 # 1. CubeProgrammer CLI Discovery
-function Resolve-Stm32CliPath {
-    $candidates = @()
-
-    # Current process env
-    if ($env:STM32_CLI) {
-        $candidates += $env:STM32_CLI
+$CliPath = $null
+if ($env:STM32_CLI -and (Test-Path "$env:STM32_CLI")) {
+    $CliPath = "$env:STM32_CLI"
+} elseif (Get-Command "STM32_Programmer_CLI.exe" -ErrorAction SilentlyContinue) {
+    $CliPath = (Get-Command "STM32_Programmer_CLI.exe").Source
+} else {
+    $CommonPath = "C:\Program Files\STMicroelectronics\STM32CubeProgrammer\bin\STM32_Programmer_CLI.exe"
+    if (Test-Path $CommonPath) {
+        $CliPath = $CommonPath
     }
-
-    # User / Machine persistent env
-    $userCli = [Environment]::GetEnvironmentVariable("STM32_CLI", "User")
-    if ($userCli) {
-        $candidates += $userCli
-    }
-
-    $machineCli = [Environment]::GetEnvironmentVariable("STM32_CLI", "Machine")
-    if ($machineCli) {
-        $candidates += $machineCli
-    }
-
-    # Common install paths
-    $candidates += @(
-        "C:\Program Files\STMicroelectronics\STM32Cube\STM32CubeProgrammer\bin\STM32_Programmer_CLI.exe",
-        "C:\Program Files\STMicroelectronics\STM32CubeProgrammer\bin\STM32_Programmer_CLI.exe",
-        "C:\Program Files (x86)\STMicroelectronics\STM32Cube\STM32CubeProgrammer\bin\STM32_Programmer_CLI.exe",
-        "C:\Program Files (x86)\STMicroelectronics\STM32CubeProgrammer\bin\STM32_Programmer_CLI.exe"
-    )
-
-    foreach ($candidate in ($candidates | Select-Object -Unique)) {
-        if ($candidate -and (Test-Path $candidate)) {
-            return (Resolve-Path $candidate).Path
-        }
-    }
-
-    $cmd = Get-Command "STM32_Programmer_CLI.exe" -ErrorAction SilentlyContinue
-    if ($cmd -and $cmd.Source -and (Test-Path $cmd.Source)) {
-        return $cmd.Source
-    }
-
-    return $null
 }
-
-$CliPath = Resolve-Stm32CliPath
 
 if (-not $CliPath) {
-    Write-ErrorLog "STM32CubeProgrammer not found."
-    Write-Log "Checked: process/user/machine STM32_CLI, PATH, and common install locations." "Yellow"
-    Write-Log "Set STM32_CLI to the full path of STM32_Programmer_CLI.exe if needed." "Yellow"
+    Write-ErrorLog "STM32CubeProgrammer not found or not in PATH."
+    Write-Log "Set STM32_CLI environment variable or add it to PATH."
     exit 2
 }
-
-Write-Log "STM32 CLI : $CliPath" "DarkCyan"
 
 # 2. Argument Validation
 if (-not $Firmware -and -not $Config) {
@@ -129,21 +95,15 @@ if ($Firmware) {
         Write-ErrorLog "Firmware file not found: $Firmware"
         exit 4
     }
-
-    $fwItem = Get-Item $Firmware
-    $Firmware = $fwItem.FullName
-    $fwSize = $fwItem.Length
-
+    $fwSize = (Get-Item $Firmware).Length
     if ($fwSize -eq 0) {
         Write-ErrorLog "Firmware file is empty (0 bytes)."
         exit 4
     }
-
     if ($fwSize -gt $MAX_FW_SIZE) {
         Write-ErrorLog "Firmware size ($fwSize bytes) exceeds 510K limit. Aborting."
         exit 4
     }
-
     Write-Log "Firmware : $Firmware ($fwSize bytes)" "Cyan"
 }
 
@@ -152,59 +112,53 @@ if ($Config) {
         Write-ErrorLog "Config file not found: $Config"
         exit 5
     }
-
-    $cfgItem = Get-Item $Config
-    $Config = $cfgItem.FullName
-    $cfgSize = $cfgItem.Length
-
+    $cfgSize = (Get-Item $Config).Length
     if ($cfgSize -ne $EXPECTED_CFG_SIZE) {
         Write-ErrorLog "Config size ($cfgSize bytes) != expected $EXPECTED_CFG_SIZE bytes."
         exit 5
     }
-
     Write-Log "Config   : $Config ($cfgSize bytes)" "Cyan"
 }
 
 # 4. Probe Discovery
 if (-not $SerialNumber) {
     Write-Log "Auto-detecting ST-Link probe..."
-
     $listOutput = & $CliPath -l 2>&1
+    
+    # Regex to match: ST-LINK SN  : 004D003D3234510F37333934
     $probeMatches = @($listOutput | Select-String -Pattern "ST-LINK SN\s*:\s*([A-F0-9]+)")
+    
+    # Extract just the SN values and deduplicate
     $uniqueProbes = @($probeMatches | ForEach-Object { $_.Matches.Groups[1].Value } | Select-Object -Unique)
-
+    
     if ($uniqueProbes.Count -eq 0) {
         Write-ErrorLog "No ST-Link probe found."
         exit 3
-    }
-    elseif ($uniqueProbes.Count -gt 1) {
+    } elseif ($uniqueProbes.Count -gt 1) {
         Write-ErrorLog "Multiple probes found. Please specify -sn <Serial>."
         Write-Host ($uniqueProbes -join "`n")
         exit 3
-    }
-    else {
+    } else {
         $SerialNumber = $uniqueProbes[0]
         Write-Log "Auto-selected SN: $SerialNumber" "Green"
     }
-}
-else {
-    Write-Log "Specified ST-Link SN: $SerialNumber"
+} else {
+    Write-Log "Specified ST-Link SN: $SerialNumber" "White"
 }
 
-$connArgs = @("port=SWD", "freq=$Frequency", "sn=$SerialNumber")
+$connStr = "port=SWD freq=$Frequency sn=$SerialNumber"
 
-# 5. Execution Helper
+# 5. Execution Logic
 function Run-ST-CLI {
     param([string[]]$Arguments)
-
     $global:LASTEXITCODE = 0
-    $allArgs = @("-c") + $connArgs + $Arguments
-
+    $allArgs = @("-c", $connStr) + $Arguments
+    
     if ($DryRun) {
-        Write-Log "[DryRun] & `"$CliPath`" $($allArgs -join ' ')" "Yellow"
+        Write-Log "[DryRun] Execute: & `"$CliPath`" $($allArgs -join ' ')" "Yellow"
         return
     }
-
+    
     & $CliPath $allArgs
 }
 

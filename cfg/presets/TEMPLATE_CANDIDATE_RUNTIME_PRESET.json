@@ -1,0 +1,48 @@
+{
+  "preset_id": "TEMPLATE_CANDIDATE_RUNTIME_PRESET",
+  "status": "CANDIDATE",
+  "topology": "TBD",
+  "runtime_profile": {
+    "ranging_mode": "TBD",
+    "target_rate_hz": null,
+    "scheduler_profile": "DEFAULT_STATIC"
+  },
+  "cfg_binary_status": "UNCHANGED",
+  "macros": {
+    "DS_BOUNDED_SCHEDULER": 0,
+    "DS_ANCHOR_OBS_SUMMARY": 0
+  },
+  "evidence": {
+    "observed_logs": [],
+    "environment": "TBD",
+    "topology": "TBD",
+    "pass_condition": "TBD",
+    "failure_condition": "TBD",
+    "artifact_paths": [],
+    "observation_date": null,
+    "operator_notes": "TBD"
+  },
+  "validation": {
+    "host_validation_required": true,
+    "host_validation_report": null,
+    "json_validated": false,
+    "schema_version": "draft-2026-04-28",
+    "validation_result": "TBD",
+    "validation_notes": "TBD"
+  },
+  "approval": {
+    "required_for_safe": true,
+    "approved_by": null,
+    "approved_date": null,
+    "approval_scope": "TBD",
+    "approval_notes": "TBD"
+  },
+  "notes": [
+    "이 template은 cfg.bin 생성물이 아니다.",
+    "이 template은 delivery/configs/*.bin을 대체하지 않는다.",
+    "이 template은 firmware parser 구현이 아니다.",
+    "이 template은 SAFE 승격을 자동화하지 않는다.",
+    "SAFE 승격은 promotion criteria 문서 기준으로 사람 승인과 검증 기록이 필요하다.",
+    "template을 실제 검증 완료 preset처럼 사용하지 않는다."
+  ]
+}
