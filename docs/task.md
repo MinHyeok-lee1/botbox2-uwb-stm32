@@ -75,3 +75,12 @@ Current Status: `Patched / Ready for bring-up`
 - **Result: PASS**. Migration functionally validated.
 - **Checkpoint Document**: `docs/antigravity/analysis/2026-04-28-ioc-shell-migration-success-checkpoint.md`
 - **Next**: Phase 11: Long-term stability verification.
+### Phase 11: Long-term Stability Verification (Completed)
+- [x] Provision 4 boards with DS-TWR 1:3 configuration.
+- [x] Capture 10-minute continuous UART logs.
+- [x] Analyze TAG logs for ok=3/3 consistency and overrun=0.
+- [x] Analyze ANCHOR logs for protocol errors and bad_pan.
+- **Result: PASS**. 99.9% success rate (3499/3502), 0 overruns.
+- **Log Path**: `artifacts/ioc_shell_ds_burnin/20260429-0920/`
+- **Report**: `docs/antigravity/analysis/2026-04-28-ioc-shell-ds-twr-burnin-result.md`
+- **Next**: Phase 11B: Extended burn-in (30min+).
