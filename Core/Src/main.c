@@ -698,14 +698,18 @@ typedef struct {
 static tag_poll_snapshot_t g_poll_ring[3];
 static uint8_t g_poll_ring_idx = 0;
 
+static inline uint16_t get_u16_le(const uint8_t *p) {
+    return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
+}
+
 static void tag_poll_snapshot_record(uint16_t target_aid, uint8_t sn, const uint8_t *msg, uint32_t len)
 {
     tag_poll_snapshot_t *s = &g_poll_ring[g_poll_ring_idx];
     s->sn         = sn;
     s->target_aid = target_aid;
-    s->pan_id     = (uint16_t)msg[3] | ((uint16_t)msg[4] << 8);
-    s->dst_short  = (uint16_t)msg[5] | ((uint16_t)msg[6] << 8);
-    s->src_short  = (uint16_t)msg[7] | ((uint16_t)msg[8] << 8);
+    s->pan_id     = get_u16_le(&msg[3]);
+    s->dst_short  = get_u16_le(&msg[5]);
+    s->src_short  = get_u16_le(&msg[7]);
     
     uint32_t to_copy = (len > 12U) ? 12U : len;
     for (uint32_t i = 0; i < to_copy; i++) {
@@ -2234,9 +2238,7 @@ static inline void hexdump(const char* tag, const uint8_t* p, uint32_t n)
     printf("%s", buf);
 }
 
-static inline uint16_t get_u16_le(const uint8_t *p) {
-    return (uint16_t)p[0] | ((uint16_t)p[1] << 8);
-}
+
 
 void anchor_main()
 {
