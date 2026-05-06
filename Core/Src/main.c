@@ -321,6 +321,22 @@ typedef enum {
 #define UWB_RUNTIME_VERBOSE_LOGS 0
 #endif
 
+#ifndef TWR_ANC_REJ_DEBUG
+#define TWR_ANC_REJ_DEBUG 0
+#endif
+
+#ifndef TWR_ANC_RAW_DEBUG
+#define TWR_ANC_RAW_DEBUG 0
+#endif
+
+#ifndef TWR_ANC_MISS_DEBUG
+#define TWR_ANC_MISS_DEBUG 0
+#endif
+
+#ifndef TWR_ANC_CORR_DEBUG
+#define TWR_ANC_CORR_DEBUG 0
+#endif
+
 #ifndef UWB_DISTANCE_CAN_LOGS
 #define UWB_DISTANCE_CAN_LOGS 1
 #endif
@@ -767,7 +783,7 @@ static void anc_terminal_snapshot_clear(void)
 
 static void anc_terminal_snapshot_dump(uint8_t prev_sn, uint8_t curr_sn)
 {
-#if UWB_RUNTIME_VERBOSE_LOGS
+#if TWR_ANC_MISS_DEBUG
     printf("[TWR][ANC][MISS] AID=0x%04X prev=%u curr=%u gap=%u\r\n",
            (unsigned int)g_sys_cfg.short_addr, (unsigned int)prev_sn, (unsigned int)curr_sn, 
            (unsigned int)(uint8_t)(curr_sn - prev_sn));
@@ -2402,7 +2418,7 @@ void anchor_main()
                 if (rej_flen > 0 && rej_flen < 1024) {
                     dwt_readrxdata(rej_hdr, (rej_flen > 12) ? 12 : rej_flen, 0);
                 }
-#if UWB_RUNTIME_VERBOSE_LOGS
+#if TWR_ANC_REJ_DEBUG
                 printf("[TWR][ANC][REJ_DBG] AID=0x%04X flen=%lu HEX:", 
                        (unsigned int)g_sys_cfg.short_addr, (unsigned long)rej_flen);
                 for (int i=0; i<12; i++) printf(" %02X", rej_hdr[i]);
@@ -2464,9 +2480,9 @@ void anchor_main()
             /* Compact raw abnormal line for per-event tracing of non-matched frames */
             /* Filtered: Only REJ and ERR are logged to prevent RXTO flooding */
             if (!is_to) {
+#if TWR_ANC_RAW_DEBUG
                 const char* cls_str = is_affrej ? "REJ" : "ERR";
                 anc_terminal_snapshot_record(cls_str, status);
-#if UWB_RUNTIME_VERBOSE_LOGS
                 printf("[TWR][ANC][RAW] AID=0x%04X cls=%s st=0x%08lX match=0\r\n",
                        (unsigned int)g_sys_cfg.short_addr, cls_str, (unsigned long)status);
 #endif
@@ -2553,13 +2569,13 @@ void anchor_main()
             
             /* Compact abnormal line for matched-type non-poll or filtered polls */
             /* If it was a poll (0xE0) but filtered, report it briefly for correlation */
+#if TWR_ANC_CORR_DEBUG
             if (type_ok) {
-#if UWB_RUNTIME_VERBOSE_LOGS
                 printf("[TWR][ANC][ABN] SN=%u AID=0x%04X rx_ok=1 sch=0 tx_st=0 tx_ok=0 err=filt(%c%c)\r\n",
                        (unsigned int)sn_rx, (unsigned int)g_sys_cfg.short_addr,
                        pan_match ? '.' : 'P', addr_match ? '.' : 'A');
-#endif
             }
+#endif
             continue;
         }
 
@@ -2607,11 +2623,9 @@ void anchor_main()
 #endif
         
         if (dwt_starttx(DWT_START_TX_DELAYED) == DWT_ERROR) {
-#if UWB_RUNTIME_VERBOSE_LOGS
+#if TWR_ANC_CORR_DEBUG
             const uint32_t now_h  = dwt_readsystimestamphi32();
             const uint64_t now_40 = ((uint64_t)now_h) << 8;
-#endif
-#if UWB_RUNTIME_VERBOSE_LOGS
             int32_t late_us = 0;
             if (now_40 > resp_tx_ts_40) {
                 uint64_t diff = now_40 - resp_tx_ts_40;
@@ -2620,10 +2634,8 @@ void anchor_main()
             }
 #endif
             g_anc_stat.tx_late++;
-#if UWB_RUNTIME_VERBOSE_LOGS
+#if TWR_ANC_CORR_DEBUG
             twr_stats_maybe_print("[ANC]", &g_anc_stat, 1000U);
-#endif
-#if UWB_RUNTIME_VERBOSE_LOGS
             /* Standard CORR line for sch failure */
             printf("[TWR][ANC][CORR] SN=%u AID=0x%04X rx_ok=1 sch=1 tx_ok=0 late_us=%ld\r\n",
                    (unsigned int)sn_rx,
@@ -2645,7 +2657,7 @@ void anchor_main()
 #if DS_ANCHOR_OBS_SUMMARY
         g_anc_obs_summary.response_tx_ok_count++;
 #endif
-#if UWB_RUNTIME_VERBOSE_LOGS
+#if TWR_ANC_CORR_DEBUG
         printf("[TWR][ANC][CORR] SN=%u AID=0x%04X rx_ok=1 sch=1 tx_ok=1\r\n",
                (unsigned int)sn_rx,
                (unsigned int)g_sys_cfg.short_addr);
