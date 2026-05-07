@@ -37,6 +37,13 @@ bool uwb_cfg_is_valid(const uwb_cfg_t *cfg) {
     if (cfg->version != UWB_CFG_VERSION) return false;
     if (cfg->length != sizeof(uwb_cfg_t)) return false;
 
+    // Range checks for structural integrity and safe array access
+    if (cfg->role > UWB_ROLE_TAG) return false;
+    if (cfg->ranging_mode > UWB_RANGING_MODE_DS) return false;
+    if (cfg->anchor_count > 8) return false; // Hard array limit
+    if (cfg->filter_profile > FILTER_PROFILE_STRONG) return false;
+    if (cfg->comm_mode > COMM_MODE_MULTICAST) return false;
+
     // Calculate CRC32 of everything except the crc32 field itself
     size_t crc_len = offsetof(uwb_cfg_t, crc32);
     if (crc_len > sizeof(uwb_cfg_t)) return false; // Sanity check
