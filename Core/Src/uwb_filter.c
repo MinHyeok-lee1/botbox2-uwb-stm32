@@ -208,7 +208,7 @@ void twr_dist_filter_update_and_log_mm_ex(uint16_t anchor_id,
     twr_dist_filter_t *f = twr_get_filter_by_anchor(anchor_id);
 #if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS
     {
-        long raw_l_local = (long)((dist_raw_mm >= 0.0f) ? (dist_raw_mm + 0.5f) : (dist_raw_mm - 0.5f));
+        long raw_l_local = uwb_round_mm(dist_raw_mm);
         printf("[TWR][TAG][DIST] AID=0x%04X SN=%u raw=%ld q=-1 clean_med=-1 iir=-1 mm\r\n",
                (unsigned int)anchor_id,
                (unsigned int)seq,
@@ -257,11 +257,11 @@ void twr_dist_filter_update_and_log_mm_ex(uint16_t anchor_id,
         }
 
 #if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS
-        long raw_l_temp = (long)((dist_raw_mm >= 0.0f) ? (dist_raw_mm + 0.5f) : (dist_raw_mm - 0.5f));
+        long raw_l_temp = uwb_round_mm(dist_raw_mm);
         long q_l_temp   = -1L;
         long med_l_temp = -1L;
         long iir_l_temp = (f->iir_initialized != 0U)
-            ? (long)((dist_iir_mm >= 0.0f) ? (dist_iir_mm + 0.5f) : (dist_iir_mm - 0.5f)) : -1L;
+            ? uwb_round_mm(dist_iir_mm) : -1L;
 
         printf("[TWR][FILT][SKIP] AID=0x%04X SN=%u raw=%ld q=%ld clean_med=%ld iir=%ld reason=%s\r\n",
             (unsigned int)anchor_id,
@@ -275,7 +275,7 @@ void twr_dist_filter_update_and_log_mm_ex(uint16_t anchor_id,
             }
 
     // raw_l: always used for stats update or logging if enabled
-    long raw_l = (long)((dist_raw_mm >= 0.0f) ? (dist_raw_mm + 0.5f) : (dist_raw_mm - 0.5f));
+    long raw_l = uwb_round_mm(dist_raw_mm);
 
 #if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS
     // q: 품질 통과면 raw 그대로, 아니면 -1
@@ -285,13 +285,13 @@ void twr_dist_filter_update_and_log_mm_ex(uint16_t anchor_id,
     // med: quality_ok && used_for_filter일 때만 값, 아니면 -1
     long med_l = -1L;
     if (quality_ok && used_for_filter) {
-        med_l = (long)((dist_med_mm >= 0.0f) ? (dist_med_mm + 0.5f) : (dist_med_mm - 0.5f));
+        med_l = uwb_round_mm(dist_med_mm);
     }
 
     // iir: 초기화되어 있으면 값, 아니면 -1 (quality_ok=false여도 마지막값 출력)
     long iir_l = -1L;
     if (f->iir_initialized != 0U) {
-        iir_l = (long)((dist_iir_mm >= 0.0f) ? (dist_iir_mm + 0.5f) : (dist_iir_mm - 0.5f));
+        iir_l = uwb_round_mm(dist_iir_mm);
     }
 
 #if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS

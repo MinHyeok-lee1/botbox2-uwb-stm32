@@ -37,6 +37,9 @@ typedef struct
     uint8_t iir_initialized; // 0: 미초기화, 1: 초기화됨
 } twr_dist_filter_t;
 
+static inline long uwb_round_mm(float mm) {
+    return (long)((mm >= 0.0f) ? (mm + 0.5f) : (mm - 0.5f));
+}
 
 // 외부(main.c 등)에 구현될 필터 매핑 헬퍼
 extern twr_dist_filter_t* twr_get_filter_by_anchor(uint16_t anchor_id);

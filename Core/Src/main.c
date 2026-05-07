@@ -1777,13 +1777,13 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
             // gate 계산에 필요한 정수값 구성 (앵커별 필터 상태 참조)
             twr_dist_filter_t *af = twr_get_filter_by_anchor(dst_short);
 
-            long dist_raw_mm_l = (long)(dist_mm + 0.5f);
+            long dist_raw_mm_l = uwb_round_mm(dist_mm);
             long iir_mm_l = -1L;
             uint8_t filt_samples = 0U;
 
             if (af != NULL) {
                 if (af->iir_initialized != 0U) {
-                    iir_mm_l = (long)(af->iir_value + 0.5f);
+                    iir_mm_l = uwb_round_mm(af->iir_value);
                 }
                 filt_samples = af->count;
             }
@@ -1967,7 +1967,7 @@ static void tag_print_multi_anchor_summary(uint8_t n, const bool ok[], const flo
         if (dist_m[i] > 0.0f) {
             float mm_f = dist_m[i] * 1000.0f;
             if (mm_f > 2147483000.0f) mm_f = 2147483000.0f;
-            dist_mm_l = (long)(mm_f + 0.5f);
+            dist_mm_l = uwb_round_mm(mm_f);
         }
 
         printf(" A%u[%04X]:%ldmm",
