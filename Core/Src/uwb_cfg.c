@@ -177,19 +177,19 @@ void uwb_cfg_print(const uwb_cfg_t *cfg) {
 
     printf("\r\n--- UWB CONFIGURATION ---\r\n");
     printf("Magic:      0x%08lX %s\r\n", (unsigned long)cfg->magic, (cfg->magic == UWB_CFG_MAGIC) ? "[OK]" : "[FAIL]");
-    printf("Version:    %u\r\n", cfg->version);
-    printf("Length:     %u\r\n", cfg->length);
+    printf("Version:    %u\r\n", (unsigned int)cfg->version);
+    printf("Length:     %u\r\n", (unsigned int)cfg->length);
     printf("CRC32:      0x%08lX %s\r\n", (unsigned long)cfg->crc32, uwb_cfg_is_valid(cfg) ? "[VALID]" : "[INVALID]");
     printf("Role:       %s\r\n", (cfg->role == UWB_ROLE_TAG) ? "TAG" : "ANCHOR");
-    printf("PAN ID:     0x%04X\r\n", cfg->pan_id);
-    printf("Short Addr: 0x%04X\r\n", cfg->short_addr);
-    printf("Mode (SS/DS): %u\r\n", cfg->ranging_mode);
-    printf("Filter Pro: %u\r\n", cfg->filter_profile);
-    printf("Comm Mode:  %u\r\n", cfg->comm_mode);
-    printf("Anchors:    %u configured\r\n", cfg->anchor_count);
+    printf("PAN ID:     0x%04X\r\n", (unsigned int)cfg->pan_id);
+    printf("Short Addr: 0x%04X\r\n", (unsigned int)cfg->short_addr);
+    printf("Mode (SS/DS): %u\r\n", (unsigned int)cfg->ranging_mode);
+    printf("Filter Pro: %u\r\n", (unsigned int)cfg->filter_profile);
+    printf("Comm Mode:  %u\r\n", (unsigned int)cfg->comm_mode);
+    printf("Anchors:    %u configured\r\n", (unsigned int)cfg->anchor_count);
     
     for (int i = 0; i < cfg->anchor_count && i < 8; i++) {
-        printf("  AID[%d]:   0x%04X\r\n", i, cfg->anchor_ids[i]);
+        printf("  AID[%d]:   0x%04X\r\n", (int)i, (unsigned int)cfg->anchor_ids[i]);
     }
     printf("-------------------------\r\n");
 }
