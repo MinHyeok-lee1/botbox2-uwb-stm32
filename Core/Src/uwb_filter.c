@@ -206,6 +206,9 @@ void twr_dist_filter_update_and_log_mm_ex(uint16_t anchor_id,
     const char *quality_fail_reason)
 {
     twr_dist_filter_t *f = twr_get_filter_by_anchor(anchor_id);
+    if (f == NULL) {
+        return;
+    }
 #if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS
     {
         long raw_l_local = uwb_round_mm(dist_raw_mm);
