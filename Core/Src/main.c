@@ -749,7 +749,7 @@ static void tag_poll_snapshot_dump(void)
         if (s->sn == 0 && s->target_aid == 0) continue;
         
         printf("  [%d] SN=%u AID=0x%04X PAN=0x%04X DST=0x%04X SRC=0x%04X HEX:", 
-               i, s->sn, s->target_aid, s->pan_id, s->dst_short, s->src_short);
+               (int)i, (unsigned int)s->sn, (unsigned int)s->target_aid, (unsigned int)s->pan_id, (unsigned int)s->dst_short, (unsigned int)s->src_short);
         for (int j = 0; j < 12; j++) {
             printf(" %02X", s->header[j]);
         }
