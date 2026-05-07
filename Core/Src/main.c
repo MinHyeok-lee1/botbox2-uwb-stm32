@@ -771,6 +771,9 @@ static bool    g_has_first_succ = false;
 
 static void anc_terminal_snapshot_record(const char *cls, uint32_t status)
 {
+    if (cls == NULL) {
+        return;
+    }
     anc_terminal_snapshot_t *s = &g_anc_ring[g_anc_ring_idx];
     for (int i = 0; i < 3; i++) s->cls[i] = cls[i];
     s->cls[3] = '\0';
