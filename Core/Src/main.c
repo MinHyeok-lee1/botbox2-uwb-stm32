@@ -390,6 +390,18 @@ void twr_dist_filter_init(void)
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define PRODUCT_LOW_POWER_MODE_NONE    0
+#define PRODUCT_LOW_POWER_MODE_STOP    1
+#define PRODUCT_LOW_POWER_MODE_STANDBY 2
+
+#ifndef PRODUCT_LOW_POWER_MODE
+#define PRODUCT_LOW_POWER_MODE PRODUCT_LOW_POWER_MODE_NONE
+#endif
+
+#define PRODUCT_LP_WAKE_PIN      USER_BUTTON_Pin
+#define PRODUCT_LP_WAKE_PORT     USER_BUTTON_GPIO_Port
+#define PRODUCT_LP_ENTRY_PIN     MODE_MANUAL_Pin
+#define PRODUCT_LP_ENTRY_PORT    MODE_MANUAL_GPIO_Port
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -429,9 +441,37 @@ uint64_t get_rx_timestamp_u64(void)
     return ts;
 }
 
-/* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-/* USER CODE BEGIN PFP */
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+static int  product_low_power_request_pending(void);
+static void product_handle_low_power_logic(void);
+#endif
+
+#if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STOP)
+static void product_config_pc13_exti_wake(void);
+static void product_enter_stop_mode(void);
+static void product_recover_after_stop_mode(void);
+#endif
+
+#if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
+static void product_config_pc13_standby_wkup2(void);
+static void product_enter_standby_mode(void);
+#endif
+
+typedef enum {
+  UWB_OK = 0,                ///< Initialization successful
+
+  UWB_ERROR_CONNECT = -1,    ///< Device not detected or wrong device ID
+  UWB_ERROR_TIMEOUT = -2,    ///< Timeout while waiting for IDLE/RC
+  UWB_ERROR_INIT = -3,       ///< DW3000 initialization failed
+} uwb_error_codes;
+
+static void apply_uwb_cfg(uwb_cfg_t *cfg);
+static uwb_error_codes uwb_lib_init(void);
+static void dw3000_reset(void);
+static uwb_cfg_t g_sys_cfg;
+
+/* USER CODE END PFP */
 /* ---- Distance filter (integer IIR low-pass) ---------------------------------
  * y[n] = y[n-1] + alpha * (x[n] - y[n-1])
  * Implemented as fixed-point: alpha = LPF_K / (1<<LPF_SHIFT)
@@ -471,6 +511,97 @@ static inline void dist_lpf_reset(void)
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+static int product_low_power_request_pending(void)
+{
+    if (HAL_GPIO_ReadPin(PRODUCT_LP_ENTRY_PORT, PRODUCT_LP_ENTRY_PIN) == GPIO_PIN_RESET) {
+        HAL_Delay(50);
+        if (HAL_GPIO_ReadPin(PRODUCT_LP_ENTRY_PORT, PRODUCT_LP_ENTRY_PIN) == GPIO_PIN_RESET) {
+            return 1;
+        }
+    }
+    return 0;
+}
+#endif
+
+#if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STOP)
+static void product_config_pc13_exti_wake(void)
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = PRODUCT_LP_WAKE_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(PRODUCT_LP_WAKE_PORT, &GPIO_InitStruct);
+    
+    HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+}
+
+static void product_enter_stop_mode(void)
+{
+    printf("[PWR] Entering STOP1 mode. Wake up via PC13...\r\n");
+    HAL_Delay(100);
+    
+    dwt_forcetrxoff();
+    HAL_FDCAN_Stop(&hfdcan1);
+    
+    product_config_pc13_exti_wake();
+    
+    HAL_SuspendTick();
+    HAL_PWREx_EnterSTOP1Mode(PWR_STOPENTRY_WFI);
+}
+
+static void product_recover_after_stop_mode(void)
+{
+    SystemClock_Config();
+    HAL_ResumeTick();
+    
+    MX_LPUART1_UART_Init();
+    printf("[PWR] Woke up from STOP1 mode.\r\n");
+    
+    HAL_FDCAN_Start(&hfdcan1);
+    
+    dw3000_reset();
+    uwb_lib_init();
+    apply_uwb_cfg(&g_sys_cfg);
+}
+#endif
+
+#if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
+static void product_config_pc13_standby_wkup2(void)
+{
+    HAL_PWR_DisableWakeUpPin(PWR_WAKEUP_PIN2);
+    __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WUF2);
+    HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN2_LOW);
+}
+
+static void product_enter_standby_mode(void)
+{
+    printf("[PWR] Entering STANDBY mode. Wake up via PC13/WKUP2...\r\n");
+    HAL_Delay(100);
+    
+    product_config_pc13_standby_wkup2();
+    
+    HAL_PWR_EnterSTANDBYMode();
+}
+#endif
+
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+static void product_handle_low_power_logic(void)
+{
+#if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STOP)
+    if (product_low_power_request_pending()) {
+        product_enter_stop_mode();
+        product_recover_after_stop_mode();
+    }
+#elif (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
+    if (product_low_power_request_pending()) {
+        product_enter_standby_mode();
+    }
+#endif
+}
+#endif
+/* USER CODE END 0 */
 extern TIM_HandleTypeDef htim2;
 
 /* ---------- micros (TIM2) ---------- */
@@ -512,13 +643,6 @@ static void dw3000_reset(void)
     HAL_Delay(2);
 }
 
-typedef enum {
-  UWB_OK = 0,                ///< Initialization successful
-
-  UWB_ERROR_CONNECT = -1,    ///< Device not detected or wrong device ID
-  UWB_ERROR_TIMEOUT = -2,    ///< Timeout while waiting for IDLE/RC
-  UWB_ERROR_INIT = -3,       ///< DW3000 initialization failed
-} uwb_error_codes;
 
 static uwb_error_codes uwb_lib_init(void)
 {
@@ -2207,6 +2331,9 @@ void tag_main(void) {
             }
 #endif
         }
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+        product_handle_low_power_logic();
+#endif
     }
 }
 
@@ -2294,6 +2421,9 @@ void anchor_main()
 
     while (1)
     {
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+        product_handle_low_power_logic();
+#endif
 #if DS_ANCHOR_OBS_SUMMARY
         anc_obs_summary_maybe_print(5000U);
 #endif
@@ -2965,6 +3095,11 @@ int main(void)
   HAL_Delay(1000);
 
   /* USER CODE BEGIN 2 */
+  if (__HAL_PWR_GET_FLAG(PWR_FLAG_SB) != RESET) {
+      __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
+      printf("\r\n[PWR] Woke up from STANDBY mode.\r\n");
+  }
+
   micros_init();
 
 #ifdef UWB_ROLE_TX
