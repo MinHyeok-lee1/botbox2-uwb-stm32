@@ -17,6 +17,7 @@
 2. [PRODUCT_QUICK_START.md](docs/PRODUCT_QUICK_START.md) (빌드 및 프로비저닝)
 3. [PRODUCT_CAN_INTERFACE.md](docs/PRODUCT_CAN_INTERFACE.md) (CAN 프로토콜 요약)
 4. [PRODUCT_PROVISIONING_GUIDE.md](docs/PRODUCT_PROVISIONING_GUIDE.md) (고정 펌웨어 모델 안내)
+5. [Release Governance & Acceptance Summary](docs/reference/CUSTOMER_RELEASE_GOVERNANCE_SUMMARY.md) (릴리스 산출물 확인 및 운영 판단 기준)
 
 > [!NOTE]
 > 상세 내부 개발 이력과 심층 거버넌스는 별도 내부 기술 문서에서 관리합니다.
