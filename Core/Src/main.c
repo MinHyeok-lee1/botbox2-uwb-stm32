@@ -719,51 +719,86 @@ static inline void micros_delay(uint32_t us)
 #define DW3000_RST_PIN     UWB_RESET_Pin
 /* ========================================= */
 
-static void dw3000_reset(void)
+#define DW3000_DEV_ID_INVALID_ZERO   (0x00000000UL)
+#define DW3000_DEV_ID_INVALID_OPEN   (0xFFFFFFFFUL)
+#define DW3000_DEVID_RETRY_MAX       (3UL)
+
+static void dw3000_cs_idle_high(void)
 {
-    /* Force CS high before reset so the SPI target starts idle. */
     HAL_GPIO_WritePin(DW3000_CS_PORT, DW3000_CS_PIN, GPIO_PIN_SET);
+}
 
-    /* Active-low reset. */
+static void dw3000_reset_pulse(void)
+{
     HAL_GPIO_WritePin(DW3000_RST_PORT, DW3000_RST_PIN, GPIO_PIN_RESET);
-    HAL_Delay(2);   // ≥1 ms
+    HAL_Delay(2);
 
-    /* Release reset and wait for the crystal/PLL to settle. */
     HAL_GPIO_WritePin(DW3000_RST_PORT, DW3000_RST_PIN, GPIO_PIN_SET);
-    HAL_Delay(5);
-
-    /* Pulse CS low to wake the DW3000 SPI interface. */
-    HAL_GPIO_WritePin(DW3000_CS_PORT, DW3000_CS_PIN, GPIO_PIN_RESET);
-    HAL_Delay(1);
-
-    HAL_GPIO_WritePin(DW3000_CS_PORT, DW3000_CS_PIN, GPIO_PIN_SET);
     HAL_Delay(5);
 }
 
+static void dw3000_spi_wake_pulse(void)
+{
+    HAL_GPIO_WritePin(DW3000_CS_PORT, DW3000_CS_PIN, GPIO_PIN_RESET);
+    HAL_Delay(1);
 
-static uwb_error_codes uwb_lib_init(void)
+    dw3000_cs_idle_high();
+    HAL_Delay(5);
+}
+
+static void dw3000_reset(void)
+{
+    dw3000_cs_idle_high();
+    dw3000_reset_pulse();
+    dw3000_spi_wake_pulse();
+}
+
+static bool dw3000_dev_id_is_invalid(uint32_t dev_id)
+{
+    return (dev_id == DW3000_DEV_ID_INVALID_OPEN) ||
+           (dev_id == DW3000_DEV_ID_INVALID_ZERO);
+}
+
+static bool dw3000_dev_id_is_supported(uint32_t dev_id)
+{
+    return (dev_id == DWT_C0_DEV_ID) ||
+           (dev_id == DWT_C0_PDOA_DEV_ID);
+}
+
+static bool dw3000_read_dev_id_with_retry(uint32_t *dev_id_out)
 {
     uint32_t dev_id = 0;
-    uint32_t attempt = 0;
-    bool dev_ok = false;
 
-    for (attempt = 1; attempt <= 3; attempt++) {
+    if (dev_id_out == NULL) {
+        return false;
+    }
+
+    for (uint32_t attempt = 1; attempt <= DW3000_DEVID_RETRY_MAX; attempt++) {
         dev_id = dwt_readdevid();
-        const bool known_c0_dev_id = ((dev_id == DWT_C0_DEV_ID) || (dev_id == DWT_C0_PDOA_DEV_ID));
         printf("[UWB][DEVID] attempt=%lu id=0x%08lX\r\n", (unsigned long)attempt, (unsigned long)dev_id);
 
-        if (known_c0_dev_id && dwt_check_dev_id() == DWT_SUCCESS) {
-            dev_ok = true;
-            break;
+        if (!dw3000_dev_id_is_invalid(dev_id) &&
+            dw3000_dev_id_is_supported(dev_id) &&
+            dwt_check_dev_id() == DWT_SUCCESS) {
+            *dev_id_out = dev_id;
+            return true;
         }
 
-        if (attempt < 3) {
+        if (attempt < DW3000_DEVID_RETRY_MAX) {
             dw3000_reset();
         }
     }
 
-    if (!dev_ok) {
-        if (dev_id == 0xFFFFFFFF || dev_id == 0x00000000) {
+    *dev_id_out = dev_id;
+    return false;
+}
+
+static uwb_error_codes uwb_lib_init(void)
+{
+    uint32_t dev_id = 0;
+
+    if (!dw3000_read_dev_id_with_retry(&dev_id)) {
+        if (dw3000_dev_id_is_invalid(dev_id)) {
             printf("[STEP3] Invalid device id: 0x%08lX\r\n", (unsigned long)dev_id);
         } else {
             printf("[STEP3] Unknown device id: 0x%08lX\r\n", (unsigned long)dev_id);
