@@ -418,6 +418,8 @@ void twr_dist_filter_init(void)
 
 
 /* USER CODE BEGIN PV */
+static bool product_boot_from_standby_wake = false;
+static bool product_wuf2_detected_on_boot = false;
 
 uint64_t get_tx_timestamp_u64(void)
 {
@@ -447,7 +449,9 @@ uint64_t get_rx_timestamp_u64(void)
 
 void SystemClock_Config(void);
 #if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+#if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STOP)
 static int  product_low_power_request_pending(void);
+#endif
 static void product_handle_low_power_logic(void);
 #endif
 
@@ -460,6 +464,7 @@ static void product_recover_after_stop_mode(void);
 #if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
 static void product_config_pc13_standby_wkup2(void);
 static void product_enter_standby_mode(void);
+static bool product_handle_latched_standby_request(const char *where);
 #endif
 
 typedef enum {
@@ -515,22 +520,46 @@ static inline void dist_lpf_reset(void)
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+static volatile bool product_manual_standby_request_latched = false;
+static volatile uint32_t product_manual_standby_irq_tick = 0;
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+    if (GPIO_Pin == MODE_MANUAL_Pin) {
+        uint32_t now = HAL_GetTick();
+        if (now - product_manual_standby_irq_tick > 250) {
+            product_manual_standby_request_latched = true;
+            product_manual_standby_irq_tick = now;
+        }
+    }
+}
+#endif
+
 static inline bool product_gpio_pressed_low(GPIO_TypeDef *port, uint16_t pin)
 {
     return HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_RESET;
 }
 
-#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+#if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STOP)
 static int product_low_power_request_pending(void)
 {
-    // Grace period check: 1000ms
-    if (HAL_GetTick() < 1000) {
+    // Ignore sleep requests during the first 1000 ms after boot/wake
+    static uint32_t boot_time = 0;
+    if (boot_time == 0) {
+        boot_time = HAL_GetTick();
+    }
+    if (HAL_GetTick() - boot_time < 1000) {
         return 0;
     }
 
     if (product_gpio_pressed_low(PRODUCT_LP_ENTRY_PORT, PRODUCT_LP_ENTRY_PIN)) {
-        HAL_Delay(50); // 50ms debounce
+        HAL_Delay(50); // Debounce
         if (product_gpio_pressed_low(PRODUCT_LP_ENTRY_PORT, PRODUCT_LP_ENTRY_PIN)) {
+            // Held-button guard: wait until released to avoid immediate/repeated re-entry
+            while (product_gpio_pressed_low(PRODUCT_LP_ENTRY_PORT, PRODUCT_LP_ENTRY_PIN)) {
+                HAL_Delay(10);
+            }
             return 1;
         }
     }
@@ -554,12 +583,6 @@ static void product_config_pc13_exti_wake(void)
 static void product_enter_stop_mode(void)
 {
     printf("[PWR] Entering STOP1 mode. Wake up via PC13...\r\n");
-    
-    // Held-button release guard: wait until PB5 (MODE_MANUAL_Pin) is released
-    while (product_gpio_pressed_low(PRODUCT_LP_ENTRY_PORT, PRODUCT_LP_ENTRY_PIN)) {
-        HAL_Delay(10);
-    }
-    
     HAL_Delay(100);
     
     dwt_forcetrxoff();
@@ -573,11 +596,6 @@ static void product_enter_stop_mode(void)
 
 static void product_recover_after_stop_mode(void)
 {
-    // Held-button release guard: wait until PC13 (USER_BUTTON_Pin) is released
-    while (product_gpio_pressed_low(USER_BUTTON_GPIO_Port, USER_BUTTON_Pin)) {
-        HAL_Delay(10);
-    }
-
     SystemClock_Config();
     HAL_ResumeTick();
     
@@ -593,6 +611,15 @@ static void product_recover_after_stop_mode(void)
 #endif
 
 #if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
+#define PRODUCT_STANDBY_MAGIC 0x53544259
+
+static void product_write_standby_marker(uint32_t val)
+{
+    __HAL_RCC_PWR_CLK_ENABLE();
+    HAL_PWR_EnableBkUpAccess();
+    TAMP->BKP0R = val;
+}
+
 static void product_config_pc13_standby_wkup2(void)
 {
     HAL_PWR_DisableWakeUpPin(PWR_WAKEUP_PIN2);
@@ -602,19 +629,41 @@ static void product_config_pc13_standby_wkup2(void)
 
 static void product_enter_standby_mode(void)
 {
-    printf("[PWR] Entering STANDBY mode. Wake up via PC13/WKUP2...\r\n");
-    
-    // Held-button release guard: wait until PB5 (MODE_MANUAL_Pin) is released
-    while (product_gpio_pressed_low(PRODUCT_LP_ENTRY_PORT, PRODUCT_LP_ENTRY_PIN)) {
-        HAL_Delay(10);
-    }
-    
-    printf("[PWR] entering standby ...\r\n");
+    printf("[PWR] entering standby (Entering STANDBY mode. Wake up via PC13/WKUP2...)\r\n");
     HAL_Delay(100);
     
     product_config_pc13_standby_wkup2();
     
+    // Write marker right before entering standby
+    product_write_standby_marker(PRODUCT_STANDBY_MAGIC);
+    
     HAL_PWR_EnterSTANDBYMode();
+}
+#endif
+
+#if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
+#define PRODUCT_STANDBY_MANUAL_GRACE_MS 250U
+
+static bool product_handle_latched_standby_request(const char *where)
+{
+    if (!product_manual_standby_request_latched) {
+        return false;
+    }
+
+    // Ignore sleep requests during the first 250 ms after boot/wake
+    static uint32_t boot_time = 0;
+    if (boot_time == 0) {
+        boot_time = HAL_GetTick();
+    }
+    if (HAL_GetTick() - boot_time < PRODUCT_STANDBY_MANUAL_GRACE_MS) {
+        // Keep latch pending during grace period, do not clear it
+        return false;
+    }
+
+    product_manual_standby_request_latched = false;
+    printf("[PWR] manual standby IRQ request accepted at %s\r\n", where);
+    product_enter_standby_mode();
+    return true;
 }
 #endif
 
@@ -627,9 +676,7 @@ static void product_handle_low_power_logic(void)
         product_recover_after_stop_mode();
     }
 #elif (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
-    if (product_low_power_request_pending()) {
-        product_enter_standby_mode();
-    }
+    product_handle_latched_standby_request("TAG");
 #endif
 }
 #endif
@@ -3127,41 +3174,80 @@ int main(void)
   HAL_Delay(1000);
 
   /* USER CODE BEGIN 2 */
-  int standby_wake_boot = 0;
-  int sb_flag = (__HAL_PWR_GET_FLAG(PWR_FLAG_SB) != RESET) ? 1 : 0;
-  int wuf2_flag = (__HAL_PWR_GET_FLAG(PWR_FLAG_WUF2) != RESET) ? 1 : 0;
-
-  if (sb_flag || wuf2_flag) {
-      standby_wake_boot = 1;
-      printf("[PWR] boot after standby wake\r\n");
-      printf("[PWR] standby wake flag detected (PWR_FLAG_SB: %d, PWR_FLAG_WUF2: %d)\r\n", sb_flag, wuf2_flag);
-      __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
-      __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WUF2);
-      printf("[PWR] wake flag cleared\r\n");
-
-      // Held-button release guard for PC13 (USER_BUTTON_Pin)
-      while (product_gpio_pressed_low(USER_BUTTON_GPIO_Port, USER_BUTTON_Pin)) {
-          HAL_Delay(10);
-      }
-  } else {
-      printf("[PWR] boot after power-on\r\n");
-  }
-
-  printf("[BOOT] standby_wake_boot=%d auto_entry=%d low_power_mode=%d\r\n",
-         standby_wake_boot,
-         (int)PRODUCT_LOW_POWER_AUTO_ENTRY,
-         (int)PRODUCT_LOW_POWER_MODE);
-
-  if (standby_wake_boot == 0) {
+  {
 #if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
-      if (PRODUCT_LOW_POWER_AUTO_ENTRY == 1) {
-          printf("[BOOT] Auto-entering STANDBY mode...\r\n");
-          product_enter_standby_mode();
+      __HAL_RCC_PWR_CLK_ENABLE();
+      HAL_PWR_EnableBkUpAccess();
+      
+      uint32_t marker = TAMP->BKP0R;
+      bool sb_flag = (__HAL_PWR_GET_FLAG(PWR_FLAG_SB) != RESET);
+      bool wuf2_flag = (__HAL_PWR_GET_FLAG(PWR_FLAG_WUF2) != RESET);
+      
+      // standby wake 인정 조건:
+      // 1. PWR_FLAG_SB == 1
+      // 2. PWR_FLAG_WUF2 == 1
+      // 3. product standby marker == valid (PRODUCT_STANDBY_MAGIC)
+      if (sb_flag && wuf2_flag && (marker == PRODUCT_STANDBY_MAGIC)) {
+          product_boot_from_standby_wake = true;
+          // Clear marker after recognizing the standby wake
+          TAMP->BKP0R = 0;
+      } else {
+          product_boot_from_standby_wake = false;
+      }
+      product_wuf2_detected_on_boot = wuf2_flag;
+
+      if (product_boot_from_standby_wake) {
+          printf("\r\n[PWR] boot after standby wake\r\n");
+          printf("[PWR] standby wake flag detected (PWR_FLAG_SB: %d, PWR_FLAG_WUF2: %d)\r\n", 1, (int)product_wuf2_detected_on_boot);
+          
+          __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
+          __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WUF2);
+          printf("[PWR] wake flag cleared\r\n");
+      } else {
+          printf("\r\n[PWR] boot after power-on\r\n");
+          // Clear marker and flags to ensure a completely clean start
+          TAMP->BKP0R = 0;
+          __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
+          __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WUF2);
+      }
+#else
+      product_boot_from_standby_wake = (__HAL_PWR_GET_FLAG(PWR_FLAG_SB) != RESET);
+      product_wuf2_detected_on_boot = (__HAL_PWR_GET_FLAG(PWR_FLAG_WUF2) != RESET);
+
+      if (product_boot_from_standby_wake) {
+          printf("\r\n[PWR] boot after standby wake\r\n");
+          printf("[PWR] standby wake flag detected (PWR_FLAG_SB: %d, PWR_FLAG_WUF2: %d)\r\n", (int)product_boot_from_standby_wake, (int)product_wuf2_detected_on_boot);
+          
+          __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
+          __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WUF2);
+          printf("[PWR] wake flag cleared\r\n");
+      } else {
+          printf("\r\n[PWR] boot after power-on\r\n");
       }
 #endif
-  } else {
-      printf("[BOOT] Auto STANDBY skipped after standby wake boot\r\n");
   }
+
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+  printf("[BOOT] standby_wake_boot=%d auto_entry=%d low_power_mode=%d\r\n",
+         (int)product_boot_from_standby_wake,
+         (int)PRODUCT_LOW_POWER_AUTO_ENTRY,
+         (int)PRODUCT_LOW_POWER_MODE);
+#endif
+
+#if PRODUCT_LOW_POWER_AUTO_ENTRY && (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+#if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STOP)
+  printf("[BOOT] Auto-entering STOP mode...\r\n");
+  product_enter_stop_mode();
+  product_recover_after_stop_mode();
+#elif (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
+  if (product_boot_from_standby_wake) {
+      printf("[BOOT] Auto STANDBY skipped after standby wake boot\r\n");
+  } else {
+      printf("[BOOT] Auto-entering STANDBY mode...\r\n");
+      product_enter_standby_mode();
+  }
+#endif
+#endif
 
   micros_init();
 
