@@ -61,8 +61,14 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, UWB_GPIO5_Pin|UWB_GPIO6_Pin|UWB_GPIO7_Pin, GPIO_PIN_RESET);
 
-  /*Configure GPIO pins : USER_BUTTON_Pin SW1_Pin SW2_Pin */
-  GPIO_InitStruct.Pin = USER_BUTTON_Pin|SW1_Pin|SW2_Pin;
+  /*Configure GPIO pins : USER_BUTTON_Pin */
+  GPIO_InitStruct.Pin = USER_BUTTON_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
+  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : SW1_Pin SW2_Pin */
+  GPIO_InitStruct.Pin = SW1_Pin|SW2_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
@@ -105,7 +111,7 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pins : MODE_AUTO_Pin MODE_MANUAL_Pin */
   GPIO_InitStruct.Pin = MODE_AUTO_Pin|MODE_MANUAL_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Pull = GPIO_PULLUP;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 }
