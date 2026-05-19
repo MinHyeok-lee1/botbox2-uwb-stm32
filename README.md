@@ -1,5 +1,18 @@
 # STM32 DW3000 IOC-Shell (현재 상태: 통합 완료)
 
+> [!WARNING]
+> Before starting any task, identify whether it belongs to Customer delivery.
+> This repository is customer-facing. Do not run experiments here.
+> Only promote source/delivery changes that were validated in 02 Product.
+> Do not copy internal antigravity analysis docs into this repository.
+> Do not implement EVB-only or Product-experimental code directly here.
+> 
+> 작업 시작 전에 반드시 이 태스크가 Customer 배포 작업인지 식별하십시오.
+> 본 저장소는 고객 대응용(customer-facing)입니다. 이곳에서 실험을 진행하지 마십시오.
+> 02 Product 저장소에서 검증된 소스/배포 변경 사항만 이곳에 반영(promote)하십시오.
+> 이 저장소에 내부 antigravity 분석 문서를 복사하지 마십시오.
+> EVB 전용 코드나 Product 실험용 코드를 이곳에 직접 구현하지 마십시오.
+
 ## 1. 개요 (Overview)
 본 저장소는 STM32G474RE + DW3000 플랫폼을 위한 통합 UWB 레인징 펌웨어를 포함하고 있습니다. 깨끗한 CubeMX 생성 "IOC Shell"을 기반으로 구축되었으며, 참조 저장소의 UWB 애플리케이션 로직을 성공적으로 이식하여 고안정성 레인징을 검증 완료했습니다.
 
