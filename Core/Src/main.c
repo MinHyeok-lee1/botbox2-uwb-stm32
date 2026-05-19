@@ -605,8 +605,9 @@ static void product_recover_after_stop_mode(void)
     HAL_FDCAN_Start(&hfdcan1);
     
     dw3000_reset();
-    uwb_lib_init();
-    apply_uwb_cfg(&g_sys_cfg);
+    if (uwb_lib_init() == UWB_OK) {
+        apply_uwb_cfg(&g_sys_cfg);
+    }
 }
 #endif
 
@@ -638,6 +639,11 @@ static void product_enter_standby_mode(void)
     product_write_standby_marker(PRODUCT_STANDBY_MAGIC);
     
     HAL_PWR_EnterSTANDBYMode();
+
+    printf("[PWR][ERR] standby entry returned unexpectedly\r\n");
+    while (1) {
+        HAL_Delay(1000);
+    }
 }
 #endif
 
@@ -706,8 +712,8 @@ static inline void micros_delay(uint32_t us)
 }
 
 /* ===== DW3000 pin mapping ===== */
-#define DW3000_CS_PORT     UWB_SPI_CS_GPIO_Port
-#define DW3000_CS_PIN      UWB_SPI_CS_Pin
+#define DW3000_CS_PORT     UWB_SPI1_CS_GPIO_Port
+#define DW3000_CS_PIN      UWB_SPI1_CS_Pin
 
 #define DW3000_RST_PORT    UWB_RESET_GPIO_Port
 #define DW3000_RST_PIN     UWB_RESET_Pin
@@ -715,20 +721,53 @@ static inline void micros_delay(uint32_t us)
 
 static void dw3000_reset(void)
 {
-    /* Active-low reset (open-drain) */
+    /* Force CS high before reset so the SPI target starts idle. */
+    HAL_GPIO_WritePin(DW3000_CS_PORT, DW3000_CS_PIN, GPIO_PIN_SET);
+
+    /* Active-low reset. */
     HAL_GPIO_WritePin(DW3000_RST_PORT, DW3000_RST_PIN, GPIO_PIN_RESET);
     HAL_Delay(2);   // ≥1 ms
+
+    /* Release reset and wait for the crystal/PLL to settle. */
     HAL_GPIO_WritePin(DW3000_RST_PORT, DW3000_RST_PIN, GPIO_PIN_SET);
-    HAL_Delay(2);
+    HAL_Delay(5);
+
+    /* Pulse CS low to wake the DW3000 SPI interface. */
+    HAL_GPIO_WritePin(DW3000_CS_PORT, DW3000_CS_PIN, GPIO_PIN_RESET);
+    HAL_Delay(1);
+
+    HAL_GPIO_WritePin(DW3000_CS_PORT, DW3000_CS_PIN, GPIO_PIN_SET);
+    HAL_Delay(5);
 }
 
 
 static uwb_error_codes uwb_lib_init(void)
 {
-    uint32_t dev_id = dwt_readdevid();
+    uint32_t dev_id = 0;
+    uint32_t attempt = 0;
+    bool dev_ok = false;
 
-    if (dwt_check_dev_id() == DWT_ERROR) {
-        printf("[STEP3] Unknown device id: 0x%08lX\r\n", (unsigned long)dev_id);
+    for (attempt = 1; attempt <= 3; attempt++) {
+        dev_id = dwt_readdevid();
+        const bool known_c0_dev_id = ((dev_id == DWT_C0_DEV_ID) || (dev_id == DWT_C0_PDOA_DEV_ID));
+        printf("[UWB][DEVID] attempt=%lu id=0x%08lX\r\n", (unsigned long)attempt, (unsigned long)dev_id);
+
+        if (known_c0_dev_id && dwt_check_dev_id() == DWT_SUCCESS) {
+            dev_ok = true;
+            break;
+        }
+
+        if (attempt < 3) {
+            dw3000_reset();
+        }
+    }
+
+    if (!dev_ok) {
+        if (dev_id == 0xFFFFFFFF || dev_id == 0x00000000) {
+            printf("[STEP3] Invalid device id: 0x%08lX\r\n", (unsigned long)dev_id);
+        } else {
+            printf("[STEP3] Unknown device id: 0x%08lX\r\n", (unsigned long)dev_id);
+        }
         return UWB_ERROR_CONNECT;
     }
 
@@ -3305,17 +3344,27 @@ int main(void)
   uwb_cfg_print(&g_sys_cfg);
 
   // 2) MCU-level reset and initialization
+  bool uwb_ready = false;
+  HAL_Delay(50);
   dw3000_reset();
-  uwb_lib_init();
+  if (uwb_lib_init() == UWB_OK) {
+      // 3) Apply config to MAC layer
+      apply_uwb_cfg(&g_sys_cfg);
 
-  // 3) Apply config to MAC layer
-  apply_uwb_cfg(&g_sys_cfg);
-  
-  // 4) Background logic init
-  twr_dist_filter_init();
-  uwb_print_radio_params_3lines();
+      // 4) Background logic init
+      twr_dist_filter_init();
+      uwb_print_radio_params_3lines();
 
-  printf("[STEP3] apply_uwb_cfg done\r\n");
+      printf("[STEP3] apply_uwb_cfg done\r\n");
+      uwb_ready = true;
+  }
+
+  if (!uwb_ready) {
+      printf("[STEP3][ERR] UWB init failed; runtime halted\r\n");
+      while (1) {
+          HAL_Delay(1000);
+      }
+  }
 
   /* USER CODE END 2 */
 
