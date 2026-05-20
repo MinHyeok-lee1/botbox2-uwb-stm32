@@ -476,6 +476,11 @@ typedef enum {
 } uwb_error_codes;
 
 static void apply_uwb_cfg(uwb_cfg_t *cfg);
+static void apply_uwb_radio_config(void);
+static void apply_uwb_identity_config(uwb_cfg_t *cfg);
+static void apply_uwb_network_config(void);
+static void apply_uwb_antenna_delay_config(void);
+static void apply_uwb_clock_or_diag_config(void);
 static uwb_error_codes uwb_lib_init(void);
 static void dw3000_reset(void);
 static uwb_cfg_t g_sys_cfg;
@@ -3184,12 +3189,15 @@ static void uwb_print_radio_params_3lines(void)
 
 
 
-static void apply_uwb_cfg(uwb_cfg_t *cfg)
+static void apply_uwb_radio_config(void)
 {
     // Step 1: Radio PHY config — restore known-good uwb_lib_cfg(NULL) path
     // This calls dwt_configure(&default_config) + dwt_configuretxrf(&txconfig_ch5)
     uwb_lib_cfg(NULL);
+}
 
+static void apply_uwb_identity_config(uwb_cfg_t *cfg)
+{
     // Step 2: MAC config — from known-good set_uwb_cfg()
     stm32_get_eui64(g_eui);
     dwt_seteui(g_eui);
@@ -3198,15 +3206,24 @@ static void apply_uwb_cfg(uwb_cfg_t *cfg)
     memcpy(_mac.eui, g_eui, 8);
     _mac.panId = cfg->pan_id;
     _mac.addr  = cfg->short_addr;
+}
 
+static void apply_uwb_network_config(void)
+{
     // Step 3: Frame filter + LEDs (identical in both versions)
     dwt_configureframefilter(DWT_FF_ENABLE_802_15_4, DWT_FF_DATA_EN | DWT_FF_ACK_EN);
     dwt_setleds(DWT_LEDS_ENABLE | DWT_LEDS_INIT_BLINK);
+}
 
-    // Step 4: Antenna delays (present in 126faf3, was missing in HEAD)
+static void apply_uwb_antenna_delay_config(void)
+{
+    // Step 4: Antenna delays
     dwt_setrxantennadelay(RX_ANT_DLY);
     dwt_settxantennadelay(TX_ANT_DLY);
+}
 
+static void apply_uwb_clock_or_diag_config(void)
+{
     // Step 5: RF amplifiers (present in 126faf3, was missing in HEAD)
     dwt_setlnapamode(DWT_LNA_ENABLE | DWT_PA_ENABLE);
 
@@ -3216,6 +3233,15 @@ static void apply_uwb_cfg(uwb_cfg_t *cfg)
     // Step 7: Sleep config (present in 126faf3, was missing in HEAD)
     dwt_configuresleep(DWT_CONFIG | DWT_LOADLDO | DWT_LOADDGC | DWT_LOADBIAS | DWT_GOTORX,
                        DWT_WAKE_CSN | DWT_SLEEP | DWT_SLP_EN | DWT_PRES_SLEEP);
+}
+
+static void apply_uwb_cfg(uwb_cfg_t *cfg)
+{
+    apply_uwb_radio_config();
+    apply_uwb_identity_config(cfg);
+    apply_uwb_network_config();
+    apply_uwb_antenna_delay_config();
+    apply_uwb_clock_or_diag_config();
 }
 
 /* USER CODE END 0 */
