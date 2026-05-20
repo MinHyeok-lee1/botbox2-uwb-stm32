@@ -475,6 +475,25 @@ typedef enum {
   UWB_ERROR_INIT = -3,       ///< DW3000 initialization failed
 } uwb_error_codes;
 
+/* 
+ * ==============================================================================
+ * UWB CONFIGURATION INIT CONTRACT & GUARDRAILS (CUSTOMER DELIVERY POLICY)
+ * ==============================================================================
+ * WARNING: The configuration helper functions MUST be executed in the exact 
+ * sequential order defined below. Reordering these calls is strictly forbidden 
+ * due to DW3000 hardware/register dependencies and runtime sleep/wake constraints.
+ *
+ * This is a CUSTOMER-FACING DELIVERY REPOSITORY. Raw modifications and internal 
+ * experiments are strictly prohibited in this codebase.
+ *
+ * Execution Order:
+ * 1. apply_uwb_radio_config()       <- Program PHY & TX/RF registers (PLL calibration)
+ * 2. apply_uwb_identity_config()    <- Define EUI64, PANID, Short Address keys
+ * 3. apply_uwb_network_config()     <- Enable MAC frame filtering (uses EUI/PANID keys)
+ * 4. apply_uwb_antenna_delay_config()<- Write TX/RX antenna delay coefficients
+ * 5. apply_uwb_clock_or_diag_config()<- Program RF amplifiers, diagnostics, & sleep mode (last)
+ * ==============================================================================
+ */
 static void apply_uwb_cfg(uwb_cfg_t *cfg);
 static void apply_uwb_radio_config(void);
 static void apply_uwb_identity_config(uwb_cfg_t *cfg);
@@ -3235,12 +3254,35 @@ static void apply_uwb_clock_or_diag_config(void)
                        DWT_WAKE_CSN | DWT_SLEEP | DWT_SLP_EN | DWT_PRES_SLEEP);
 }
 
+/*
+ * CONTRACT & ORDERING GUARDRAIL (CUSTOMER DELIVERY):
+ * DO NOT REORDER OR MERGE these helper functions. The call sequence must remain:
+ * 1. apply_uwb_radio_config();       <- MUST be first. Program channel/RF/TX power registers.
+ * 2. apply_uwb_identity_config(cfg); <- Set MAC addresses/PANID keys before enabling filters.
+ * 3. apply_uwb_network_config();     <- Enable frame filtering based on address keys.
+ * 4. apply_uwb_antenna_delay_config();<- Write TX/RX antenna delay coefficients.
+ * 5. apply_uwb_clock_or_diag_config();<- Configure RF LNA/PA, diagnostics, and Sleep config (last).
+ *
+ * CUSTOMER COUPLING NOTE:
+ * - This customer build disables low-power standby entry (PRODUCT_LOW_POWER_MODE=0),
+ *   but requires this exact execution sequence for correct ranging functionality.
+ * - Internal hardware experiments/reordering are forbidden in this delivery branch.
+ */
 static void apply_uwb_cfg(uwb_cfg_t *cfg)
 {
+    /* [DO NOT REORDER] Step 1: Radio/PHY Config */
     apply_uwb_radio_config();
+
+    /* [DO NOT REORDER] Step 2: MAC Identity Config */
     apply_uwb_identity_config(cfg);
+
+    /* [DO NOT REORDER] Step 3: Network/Frame-Filter Config */
     apply_uwb_network_config();
+
+    /* [DO NOT REORDER] Step 4: Antenna Delay Config */
     apply_uwb_antenna_delay_config();
+
+    /* [DO NOT REORDER] Step 5: Clock, LNA/PA, CIA Diags, and Sleep Config */
     apply_uwb_clock_or_diag_config();
 }
 
