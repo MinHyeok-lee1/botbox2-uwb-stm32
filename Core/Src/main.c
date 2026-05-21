@@ -365,10 +365,12 @@ void Error_Handler(void);
 #define NUM_OF_ANCHORS 3U
 #endif
 static twr_dist_filter_t g_twr_dist_filter_by_anchor[NUM_OF_ANCHORS];
+static uwb_distance_lpf_t g_output_dist_filter_by_anchor[NUM_OF_ANCHORS];
 
 // anchor_id -> per-anchor filter 매핑 (구현은 g_sys_cfg 선언 이후에 정의)
 static int8_t twr_anchor_slot_from_id(uint16_t anchor_id);
 twr_dist_filter_t* twr_get_filter_by_anchor(uint16_t anchor_id);
+static uwb_distance_lpf_t* output_distance_filter_by_anchor(uint16_t anchor_id);
 
 // 내부용: 필터 상태 초기화
 
@@ -381,11 +383,34 @@ void twr_dist_filter_init(void)
 {
     for (uint8_t i = 0U; i < NUM_OF_ANCHORS; i++) {
         twr_dist_filter_reset(&g_twr_dist_filter_by_anchor[i]);
+        uwb_distance_lpf_reset(&g_output_dist_filter_by_anchor[i]);
     }
 }
 
 // Quality scoring functions (twr_diag_is_sane, twr_quality_weight_u8,
 // twr_quality_from_diag) are now provided by uwb_quality.c
+
+#if (PRODUCT_GPIO_DIAG == 1)
+static void product_gpio_diag_blink(int count)
+{
+    // Minimally configure LED_RIGHT (PA8) in case GPIO is not yet initialized
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    GPIO_InitStruct.Pin = LED_RIGHT_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(LED_RIGHT_GPIO_Port, &GPIO_InitStruct);
+
+    for (int i = 0; i < count; i++) {
+        HAL_GPIO_WritePin(LED_RIGHT_GPIO_Port, LED_RIGHT_Pin, GPIO_PIN_SET);
+        HAL_Delay(200);
+        HAL_GPIO_WritePin(LED_RIGHT_GPIO_Port, LED_RIGHT_Pin, GPIO_PIN_RESET);
+        HAL_Delay(200);
+    }
+    // HAL_Delay(1000); // 1 second gap after pattern
+}
+#endif
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
@@ -400,6 +425,30 @@ void twr_dist_filter_init(void)
 
 #ifndef PRODUCT_LOW_POWER_AUTO_ENTRY
 #define PRODUCT_LOW_POWER_AUTO_ENTRY 0
+#endif
+
+#ifndef PRODUCT_PC0_USER_ACTION
+#define PRODUCT_PC0_USER_ACTION 0
+#endif
+
+#ifndef PRODUCT_UART_DIAG
+#define PRODUCT_UART_DIAG 0
+#endif
+
+#ifndef PRODUCT_GPIO_DIAG
+#define PRODUCT_GPIO_DIAG 0
+#endif
+
+#ifndef PRODUCT_DUAL_UART_DIAG
+#define PRODUCT_DUAL_UART_DIAG 0
+#endif
+
+#ifndef PRODUCT_MINIMAL_BOOT_LED_DIAG
+#define PRODUCT_MINIMAL_BOOT_LED_DIAG 0
+#endif
+
+#ifndef PRODUCT_UART_SMOKE_KNOWN_GOOD
+#define PRODUCT_UART_SMOKE_KNOWN_GOOD 0
 #endif
 
 #define PRODUCT_LP_WAKE_PIN      USER_BUTTON_Pin
@@ -418,8 +467,6 @@ void twr_dist_filter_init(void)
 
 
 /* USER CODE BEGIN PV */
-static bool product_boot_from_standby_wake = false;
-static bool product_wuf2_detected_on_boot = false;
 
 uint64_t get_tx_timestamp_u64(void)
 {
@@ -452,7 +499,10 @@ void SystemClock_Config(void);
 #if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STOP)
 static int  product_low_power_request_pending(void);
 #endif
-static void product_handle_low_power_logic(void);
+static void product_handle_low_power_logic(const char *where);
+#if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
+static bool product_handle_latched_standby_request(const char *where);
+#endif
 #endif
 
 #if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STOP)
@@ -462,9 +512,10 @@ static void product_recover_after_stop_mode(void);
 #endif
 
 #if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
-static void product_config_pc13_standby_wkup2(void);
+static bool product_standby_wake_pin_inactive(void);
+static bool product_config_pc13_standby_wkup2(void);
+static void product_prepare_peripherals_for_standby(void);
 static void product_enter_standby_mode(void);
-static bool product_handle_latched_standby_request(const char *where);
 #endif
 
 typedef enum {
@@ -477,14 +528,11 @@ typedef enum {
 
 /* 
  * ==============================================================================
- * UWB CONFIGURATION INIT CONTRACT & GUARDRAILS (CUSTOMER DELIVERY POLICY)
+ * UWB CONFIGURATION INIT CONTRACT & GUARDRAILS
  * ==============================================================================
  * WARNING: The configuration helper functions MUST be executed in the exact 
  * sequential order defined below. Reordering these calls is strictly forbidden 
  * due to DW3000 hardware/register dependencies and runtime sleep/wake constraints.
- *
- * This is a CUSTOMER-FACING DELIVERY REPOSITORY. Raw modifications and internal 
- * experiments are strictly prohibited in this codebase.
  *
  * Execution Order:
  * 1. apply_uwb_radio_config()       <- Program PHY & TX/RF registers (PLL calibration)
@@ -492,6 +540,11 @@ typedef enum {
  * 3. apply_uwb_network_config()     <- Enable MAC frame filtering (uses EUI/PANID keys)
  * 4. apply_uwb_antenna_delay_config()<- Write TX/RX antenna delay coefficients
  * 5. apply_uwb_clock_or_diag_config()<- Program RF amplifiers, diagnostics, & sleep mode (last)
+ *
+ * EVB -> Product -> Customer Promotion Rule:
+ * Any change to this structure must first be validated on EVB, adapted to Product 
+ * (low-power, CAN, backup marker paths), validated on physical Product board, 
+ * and only then promoted to Customer.
  * ==============================================================================
  */
 static void apply_uwb_cfg(uwb_cfg_t *cfg);
@@ -505,58 +558,35 @@ static void dw3000_reset(void);
 static uwb_cfg_t g_sys_cfg;
 
 /* USER CODE END PFP */
-/* ---- Distance filter (integer IIR low-pass) ---------------------------------
- * y[n] = y[n-1] + alpha * (x[n] - y[n-1])
- * Implemented as fixed-point: alpha = LPF_K / (1<<LPF_SHIFT)
- * - No floats
- * - Safe with newlib-nano printf rules
- */
-#define DIST_LPF_SHIFT   (4u)   /* 1<<4 = 16 */
-#define DIST_LPF_K       (2u)   /* alpha = 2/16 = 0.125 */
-
-static int32_t  g_dist_filt_mm      = 0;
-static uint8_t  g_dist_filt_inited  = 0;
-
-static inline int32_t dist_lpf_update_mm(int32_t x_mm)
-{
-    if (!g_dist_filt_inited) {
-        g_dist_filt_mm = x_mm;
-        g_dist_filt_inited = 1;
-        return g_dist_filt_mm;
-    }
-
-    int32_t err = x_mm - g_dist_filt_mm;
-    /* rounding: add 0.5 LSB before shift when positive/negative */
-    int32_t delta = (err * (int32_t)DIST_LPF_K);
-    if (delta >= 0) delta += (1 << (DIST_LPF_SHIFT - 1));
-    else            delta -= (1 << (DIST_LPF_SHIFT - 1));
-    g_dist_filt_mm += (delta >> DIST_LPF_SHIFT);
-
-    return g_dist_filt_mm;
-}
-
-static inline void dist_lpf_reset(void)
-{
-    g_dist_filt_inited = 0;
-    g_dist_filt_mm = 0;
-}
-/* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+static bool product_boot_from_standby_wake = false;
+static bool product_wuf2_detected_on_boot = false;
+
 #if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
 static volatile bool product_manual_standby_request_latched = false;
 static volatile uint32_t product_manual_standby_irq_tick = 0;
+static bool product_standby_request_is_latched(void);
 
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 {
     if (GPIO_Pin == MODE_MANUAL_Pin) {
         uint32_t now = HAL_GetTick();
+        printf("[PWR][IRQ] manual standby EXTI pin=%u tick=%lu\r\n", (unsigned int)GPIO_Pin, (unsigned long)now);
         if (now - product_manual_standby_irq_tick > 250) {
             product_manual_standby_request_latched = true;
+            printf("[PWR][IRQ] manual standby latched tick=%lu\r\n", (unsigned long)now);
             product_manual_standby_irq_tick = now;
         }
     }
+}
+#endif
+
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+static bool product_standby_request_is_latched(void)
+{
+    return product_manual_standby_request_latched;
 }
 #endif
 
@@ -637,6 +667,11 @@ static void product_recover_after_stop_mode(void)
 
 #if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
 #define PRODUCT_STANDBY_MAGIC 0x53544259
+#define PRODUCT_STANDBY_WAKE_STABLE_SAMPLES 3U
+#define PRODUCT_STANDBY_WAKE_STABLE_DELAY_MS 25U
+#define PRODUCT_STANDBY_WAKE_ARM_DELAY_MS 5U
+#define PRODUCT_LP_ENTRY_EXTI_IRQn EXTI9_5_IRQn
+#define PRODUCT_UWB_IRQ_EXTI_IRQn EXTI4_IRQn
 
 static void product_write_standby_marker(uint32_t val)
 {
@@ -645,21 +680,115 @@ static void product_write_standby_marker(uint32_t val)
     TAMP->BKP0R = val;
 }
 
-static void product_config_pc13_standby_wkup2(void)
+static void product_config_pc13_standby_wake_gpio(void)
 {
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+
+    GPIO_InitStruct.Pin = PRODUCT_LP_WAKE_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(PRODUCT_LP_WAKE_PORT, &GPIO_InitStruct);
+}
+
+static bool product_standby_wake_pin_inactive(void)
+{
+    return HAL_GPIO_ReadPin(PRODUCT_LP_WAKE_PORT, PRODUCT_LP_WAKE_PIN) == GPIO_PIN_SET;
+}
+
+static bool product_standby_wake_pin_stably_inactive(void)
+{
+    for (uint32_t sample = 0; sample < PRODUCT_STANDBY_WAKE_STABLE_SAMPLES; sample++) {
+        if (!product_standby_wake_pin_inactive()) {
+            return false;
+        }
+        if ((sample + 1U) < PRODUCT_STANDBY_WAKE_STABLE_SAMPLES) {
+            HAL_Delay(PRODUCT_STANDBY_WAKE_STABLE_DELAY_MS);
+        }
+    }
+
+    return true;
+}
+
+static bool product_config_pc13_standby_wkup2(void)
+{
+    __HAL_RCC_PWR_CLK_ENABLE();
+    product_config_pc13_standby_wake_gpio();
+
+    if (!product_standby_wake_pin_inactive()) {
+        printf("[PWR][STBY][BLOCK] wake pin active-low held; standby entry skipped\r\n");
+        return false;
+    }
+
+    if (!product_standby_wake_pin_stably_inactive()) {
+        printf("[PWR][STBY][BLOCK] wake pin unstable; standby entry skipped\r\n");
+        return false;
+    }
+
     HAL_PWR_DisableWakeUpPin(PWR_WAKEUP_PIN2);
     __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WUF2);
+
+    if (!product_standby_wake_pin_inactive()) {
+        printf("[PWR][STBY][BLOCK] wake pin active-low held before WKUP2 arm; standby entry skipped\r\n");
+        return false;
+    }
+
     HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN2_LOW);
+    HAL_Delay(PRODUCT_STANDBY_WAKE_ARM_DELAY_MS);
+
+    if (__HAL_PWR_GET_FLAG(PWR_FLAG_WUF2) != RESET) {
+        HAL_PWR_DisableWakeUpPin(PWR_WAKEUP_PIN2);
+        __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WUF2);
+        printf("[PWR][STBY][BLOCK] wake pin unstable after WKUP2 arm; standby entry skipped\r\n");
+        return false;
+    }
+
+    printf("[PWR][STBY] wake pin armed: WKUP2 low-active\r\n");
+    return true;
+}
+
+static void product_clear_manual_entry_irq_pending(void)
+{
+    __HAL_GPIO_EXTI_CLEAR_IT(MODE_MANUAL_Pin);
+    HAL_NVIC_ClearPendingIRQ(PRODUCT_LP_ENTRY_EXTI_IRQn);
+}
+
+static void product_clear_uwb_irq_pending(void)
+{
+    __HAL_GPIO_EXTI_CLEAR_IT(UWB_IRQ_Pin);
+    HAL_NVIC_ClearPendingIRQ(PRODUCT_UWB_IRQ_EXTI_IRQn);
+}
+
+static void product_prepare_peripherals_for_standby(void)
+{
+    dwt_forcetrxoff();
+    dwt_write32bitreg(SYS_STATUS_ID, TAG_SYS_STATUS_HYGIENE_BIT_MASK);
+
+    HAL_FDCAN_Stop(&hfdcan1);
+
+    product_clear_uwb_irq_pending();
+    product_clear_manual_entry_irq_pending();
+    product_manual_standby_request_latched = false;
 }
 
 static void product_enter_standby_mode(void)
 {
-    printf("[PWR] entering standby (Entering STANDBY mode. Wake up via PC13/WKUP2...)\r\n");
-    HAL_Delay(100);
+    printf("[PWR] entering standby ...\r\n");
+    fflush(stdout);
+    HAL_Delay(75);
+
+    product_prepare_peripherals_for_standby();
     
-    product_config_pc13_standby_wkup2();
+    if (!product_config_pc13_standby_wkup2()) {
+        return;
+    }
+
+    printf("[PWR][STBY] wake pin armed\r\n");
+    fflush(stdout);
+    HAL_Delay(75);
     
-    // Write marker right before entering standby
     product_write_standby_marker(PRODUCT_STANDBY_MAGIC);
     
     HAL_PWR_EnterSTANDBYMode();
@@ -691,6 +820,7 @@ static bool product_handle_latched_standby_request(const char *where)
     }
 
     product_manual_standby_request_latched = false;
+    product_clear_manual_entry_irq_pending();
     printf("[PWR] manual standby IRQ request accepted at %s\r\n", where);
     product_enter_standby_mode();
     return true;
@@ -698,7 +828,7 @@ static bool product_handle_latched_standby_request(const char *where)
 #endif
 
 #if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
-static void product_handle_low_power_logic(void)
+static void product_handle_low_power_logic(const char *where)
 {
 #if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STOP)
     if (product_low_power_request_pending()) {
@@ -706,10 +836,44 @@ static void product_handle_low_power_logic(void)
         product_recover_after_stop_mode();
     }
 #elif (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
-    product_handle_latched_standby_request("TAG");
+    product_handle_latched_standby_request(where);
 #endif
 }
 #endif
+
+#if PRODUCT_PC0_USER_ACTION
+static void product_init_pc0(void)
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    GPIO_InitStruct.Pin = GPIO_PIN_0;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+}
+
+static int product_pc0_user_action_pending(void)
+{
+    if (product_gpio_pressed_low(GPIOC, GPIO_PIN_0)) {
+        HAL_Delay(50); // Debounce
+        if (product_gpio_pressed_low(GPIOC, GPIO_PIN_0)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void product_handle_pc0_user_action(void)
+{
+    if (product_pc0_user_action_pending()) {
+        printf("[BTN] PC0 USER action (polarity pending confirmation)\r\n");
+        while (product_gpio_pressed_low(GPIOC, GPIO_PIN_0)) {
+            HAL_Delay(10);
+        }
+    }
+}
+#endif
+
 /* USER CODE END 0 */
 extern TIM_HandleTypeDef htim2;
 
@@ -1143,6 +1307,21 @@ twr_dist_filter_t* twr_get_filter_by_anchor(uint16_t anchor_id)
         return NULL;
     }
     return &g_twr_dist_filter_by_anchor[(uint8_t)slot];
+}
+
+static uwb_distance_lpf_t* output_distance_filter_by_anchor(uint16_t anchor_id)
+{
+    int8_t slot = twr_anchor_slot_from_id(anchor_id);
+
+    if ((slot < 0) && (anchor_id == g_sys_cfg.short_addr)) {
+        slot = 0;
+    }
+
+    if ((slot < 0) || (slot >= (int8_t)NUM_OF_ANCHORS)) {
+        return NULL;
+    }
+
+    return &g_output_dist_filter_by_anchor[(uint8_t)slot];
 }
 
 // Legacy cfg_reset_default_ram and cfg_active_* functions have been removed.
@@ -2277,6 +2456,11 @@ static void tag_print_multi_anchor_summary(uint8_t n, const bool ok[], const flo
             dist_mm_l = uwb_round_mm(mm_f);
         }
 
+        uwb_distance_lpf_t *of = output_distance_filter_by_anchor(aid);
+        if (of != NULL) {
+            dist_mm_l = (long)uwb_distance_lpf_update_mm(of, (int32_t)dist_mm_l);
+        }
+
         printf(" A%u[%04X]:%ldmm",
                (unsigned int)i,
                (unsigned int)aid,
@@ -2308,6 +2492,7 @@ void tag_main(void) {
 
         bool  ok[8];
         float dist_m[8];
+        bool standby_latch_seen = false;
 
         for (uint8_t i = 0; i < n; i++) {
             ok[i]     = false;
@@ -2324,6 +2509,14 @@ void tag_main(void) {
         const uint32_t period_target_us = 1000000U / TAG_RANGING_RATE_HZ;
 
         for (uint8_t i = 0; i < n; i++) {
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+            if (product_standby_request_is_latched()) {
+                dwt_forcetrxoff();
+                product_handle_low_power_logic("TAG");
+                standby_latch_seen = true;
+                break;
+            }
+#endif
             uint16_t aid = g_sys_cfg.anchor_ids[i];
             if (aid == 0U) {
                 ok[i] = false;
@@ -2337,11 +2530,28 @@ void tag_main(void) {
                 micros_delay(TAG_SLOT3_GUARD_US);
             }
 
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+            if (product_standby_request_is_latched()) {
+                dwt_forcetrxoff();
+                product_handle_low_power_logic("TAG");
+                standby_latch_seen = true;
+                break;
+            }
+#endif
+
             uint32_t t_anchor_start = micros();
             uint32_t slot_envelope_us = TAG_ANCHOR_SLOT_MS * 1000U;
 
             /* 2. Bounded Polling Envelope */
             do {
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+                if (product_standby_request_is_latched()) {
+                    dwt_forcetrxoff();
+                    product_handle_low_power_logic("TAG");
+                    standby_latch_seen = true;
+                    break;
+                }
+#endif
                 ok[i] = poll_one_aid(aid, &dist_m[i]);
 
                 if (ok[i]) break; // Success
@@ -2366,10 +2576,22 @@ void tag_main(void) {
                 dw_recover_idle();
                 
             } while (true);
+
+            if (standby_latch_seen) {
+                break;
+            }
         }
 #else
         /* 1st pass: Poll all anchors defined in runtime config */
         for (uint8_t i = 0; i < n; i++) {
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+            if (product_standby_request_is_latched()) {
+                dwt_forcetrxoff();
+                product_handle_low_power_logic("TAG");
+                standby_latch_seen = true;
+                break;
+            }
+#endif
             uint16_t aid = g_sys_cfg.anchor_ids[i];
             if (aid == 0U) {
                 ok[i] = false;
@@ -2382,6 +2604,15 @@ void tag_main(void) {
                 micros_delay(TAG_SLOT3_GUARD_US);
             }
 
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+            if (product_standby_request_is_latched()) {
+                dwt_forcetrxoff();
+                product_handle_low_power_logic("TAG");
+                standby_latch_seen = true;
+                break;
+            }
+#endif
+
             ok[i] = poll_one_aid(aid, &dist_m[i]);
         }
 #endif
@@ -2389,6 +2620,14 @@ void tag_main(void) {
 #if !DS_BOUNDED_SCHEDULER
         /* 2nd pass: Retry only failures once after recovery */
         for (uint8_t i = 0; i < n; i++) {
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+            if (product_standby_request_is_latched()) {
+                dwt_forcetrxoff();
+                product_handle_low_power_logic("TAG");
+                standby_latch_seen = true;
+                break;
+            }
+#endif
             if (ok[i]) continue;
             uint16_t aid = g_sys_cfg.anchor_ids[i];
             if (aid == 0U) continue;
@@ -2398,6 +2637,14 @@ void tag_main(void) {
         }
 #endif
 
+
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+        if (standby_latch_seen || product_standby_request_is_latched()) {
+            dwt_forcetrxoff();
+            product_handle_low_power_logic("TAG");
+            continue;
+        }
+#endif
 
 #if !DS_RUNTIME_QUIET_MEASURE && (TAG_RANGING_RATE_HZ <= 64U)
         /* Report multi-anchor summary (A1..A3 typically) */
@@ -2509,7 +2756,10 @@ void tag_main(void) {
 #endif
         }
 #if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
-        product_handle_low_power_logic();
+        product_handle_low_power_logic("TAG");
+#endif
+#if PRODUCT_PC0_USER_ACTION
+        product_handle_pc0_user_action();
 #endif
     }
 }
@@ -2599,7 +2849,10 @@ void anchor_main()
     while (1)
     {
 #if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
-        product_handle_low_power_logic();
+        product_handle_low_power_logic("ANC");
+#endif
+#if PRODUCT_PC0_USER_ACTION
+        product_handle_pc0_user_action();
 #endif
 #if DS_ANCHOR_OBS_SUMMARY
         anc_obs_summary_maybe_print(5000U);
@@ -3138,6 +3391,10 @@ void anchor_main()
                 double d_mm = ds_dist * 1000.0;
                 if (d_mm > 2147483647.0) d_mm = 2147483647.0;
                 long ds_dist_mm = (long)d_mm;
+                uwb_distance_lpf_t *of = output_distance_filter_by_anchor(g_sys_cfg.short_addr);
+                if (of != NULL) {
+                    ds_dist_mm = (long)uwb_distance_lpf_update_mm(of, (int32_t)ds_dist_mm);
+                }
 
                 uint32_t can_id = 0x200U + (g_sys_cfg.short_addr & 0x0FU);
                 uwb_can_send_anchor_distance_mm(g_sys_cfg.short_addr, ds_dist_mm);
@@ -3236,7 +3493,7 @@ static void apply_uwb_network_config(void)
 
 static void apply_uwb_antenna_delay_config(void)
 {
-    // Step 4: Antenna delays
+    // Step 4: Antenna delays (present in 126faf3, was missing in HEAD)
     dwt_setrxantennadelay(RX_ANT_DLY);
     dwt_settxantennadelay(TX_ANT_DLY);
 }
@@ -3255,7 +3512,7 @@ static void apply_uwb_clock_or_diag_config(void)
 }
 
 /*
- * CONTRACT & ORDERING GUARDRAIL (CUSTOMER DELIVERY):
+ * CONTRACT & ORDERING GUARDRAIL:
  * DO NOT REORDER OR MERGE these helper functions. The call sequence must remain:
  * 1. apply_uwb_radio_config();       <- MUST be first. Program channel/RF/TX power registers.
  * 2. apply_uwb_identity_config(cfg); <- Set MAC addresses/PANID keys before enabling filters.
@@ -3263,10 +3520,9 @@ static void apply_uwb_clock_or_diag_config(void)
  * 4. apply_uwb_antenna_delay_config();<- Write TX/RX antenna delay coefficients.
  * 5. apply_uwb_clock_or_diag_config();<- Configure RF LNA/PA, diagnostics, and Sleep config (last).
  *
- * CUSTOMER COUPLING NOTE:
- * - This customer build disables low-power standby entry (PRODUCT_LOW_POWER_MODE=0),
- *   but requires this exact execution sequence for correct ranging functionality.
- * - Internal hardware experiments/reordering are forbidden in this delivery branch.
+ * RUNTIME COUPLING NOTE (Product vs Customer):
+ * - Product Standby/Stop low-power mode requires DWT_WAKE_CSN pin configuration matching the schematic.
+ * - Customer disables low-power mode (PRODUCT_LOW_POWER_MODE=0), but relies on the same sequence to maintain ranging.
  */
 static void apply_uwb_cfg(uwb_cfg_t *cfg)
 {
@@ -3299,21 +3555,113 @@ int main(void)
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
+#if (PRODUCT_GPIO_DIAG == 1)
+  product_gpio_diag_blink(1);
+#endif
+
+#if (PRODUCT_UART_DIAG == 1)
+  // Disable buffering on stdout as safety
+  setvbuf(stdout, NULL, _IONBF, 0);
+
+  // Ultra-early UART initialization on default HSI clock (16MHz) before clock config
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  MX_GPIO_Init();
+  MX_LPUART1_UART_Init();
+  HAL_UART_Transmit(&hlpuart1, (uint8_t *)"[UART_DIAG] after HAL_Init\r\n", 28, HAL_MAX_DELAY);
+  HAL_Delay(100);
+#endif
+
   /* Configure the system clock */
   SystemClock_Config();
 
+#if (PRODUCT_MINIMAL_BOOT_LED_DIAG == 1)
+  // Minimally configure LED_RIGHT (PA8)
+  __HAL_RCC_GPIOA_CLK_ENABLE();
+  GPIO_InitTypeDef GPIO_InitStruct = {0};
+  GPIO_InitStruct.Pin = LED_RIGHT_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(LED_RIGHT_GPIO_Port, &GPIO_InitStruct);
+
+  while (1) {
+      HAL_GPIO_WritePin(LED_RIGHT_GPIO_Port, LED_RIGHT_Pin, GPIO_PIN_SET);
+      HAL_Delay(200);
+      HAL_GPIO_WritePin(LED_RIGHT_GPIO_Port, LED_RIGHT_Pin, GPIO_PIN_RESET);
+      HAL_Delay(200);
+  }
+#endif
+
+#if (PRODUCT_GPIO_DIAG == 1)
+  product_gpio_diag_blink(2);
+#endif
+
+#if (PRODUCT_UART_DIAG == 1)
+  // Re-initialize LPUART1 because clock speed changed (PLL is active now)
+  MX_LPUART1_UART_Init();
+  HAL_UART_Transmit(&hlpuart1, (uint8_t *)"[UART_DIAG] after SystemClock_Config\r\n", 38, HAL_MAX_DELAY);
+  HAL_Delay(100);
+#endif
+
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+
+#if (PRODUCT_GPIO_DIAG == 1)
+  product_gpio_diag_blink(3);
+#endif
+
   MX_SPI1_Init();
   MX_LPUART1_UART_Init();
+
+#if (PRODUCT_GPIO_DIAG == 1)
+  product_gpio_diag_blink(4);
+#endif
+
+#if (PRODUCT_UART_DIAG == 1)
+  HAL_UART_Transmit(&hlpuart1, (uint8_t *)"[UART_DIAG] after MX_LPUART1_UART_Init\r\n", 40, HAL_MAX_DELAY);
+  HAL_Delay(100);
+  HAL_UART_Transmit(&hlpuart1, (uint8_t *)"[UART_DIAG] direct HAL_UART_Transmit OK\r\n", 41, HAL_MAX_DELAY);
+  HAL_Delay(100);
+#endif
+
   MX_FDCAN1_Init();
   can_start();
   MX_UART5_Init();
   MX_FMAC_Init();
   MX_TIM2_Init();
 
+#if (PRODUCT_DUAL_UART_DIAG == 1)
+  // Direct markers
+  HAL_UART_Transmit(&hlpuart1, (uint8_t *)"[DUAL_UART_DIAG][LPUART1] direct transmit OK\r\n", 46, HAL_MAX_DELAY);
+  HAL_UART_Transmit(&huart5, (uint8_t *)"[DUAL_UART_DIAG][UART5] direct transmit OK\r\n", 44, HAL_MAX_DELAY);
+  HAL_Delay(100);
 
-  HAL_Delay(1000);
+  // Printf marker
+  printf("[DUAL_UART_DIAG] printf marker after dual direct transmit\r\n");
+  HAL_Delay(100);
+
+  // Repeating heartbeat loop
+  while (1) {
+      HAL_UART_Transmit(&hlpuart1, (uint8_t *)"[DUAL_UART_DIAG][LPUART1] heartbeat\r\n", 37, HAL_MAX_DELAY);
+      HAL_UART_Transmit(&huart5, (uint8_t *)"[DUAL_UART_DIAG][UART5] heartbeat\r\n", 35, HAL_MAX_DELAY);
+      // HAL_Delay(1000);
+  }
+#endif
+
+#if (PRODUCT_UART_SMOKE_KNOWN_GOOD == 1)
+  // HAL_Delay(1000);
+  HAL_UART_Transmit(&hlpuart1, (uint8_t *)"[UART_SMOKE][LPUART1] direct OK\r\n", 33, HAL_MAX_DELAY);
+  HAL_UART_Transmit(&huart5, (uint8_t *)"[UART_SMOKE][UART5] direct OK\r\n", 31, HAL_MAX_DELAY);
+  printf("[UART_SMOKE] printf OK\r\n");
+
+  while (1) {
+      HAL_UART_Transmit(&hlpuart1, (uint8_t *)"[UART_SMOKE][LPUART1] heartbeat\r\n", 34, HAL_MAX_DELAY);
+      HAL_UART_Transmit(&huart5, (uint8_t *)"[UART_SMOKE][UART5] heartbeat\r\n", 32, HAL_MAX_DELAY);
+      // HAL_Delay(1000);
+  }
+#endif
+
+  // HAL_Delay(1000);
 
   /* USER CODE BEGIN 2 */
   {
@@ -3368,28 +3716,6 @@ int main(void)
       }
 #endif
   }
-
-#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
-  printf("[BOOT] standby_wake_boot=%d auto_entry=%d low_power_mode=%d\r\n",
-         (int)product_boot_from_standby_wake,
-         (int)PRODUCT_LOW_POWER_AUTO_ENTRY,
-         (int)PRODUCT_LOW_POWER_MODE);
-#endif
-
-#if PRODUCT_LOW_POWER_AUTO_ENTRY && (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
-#if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STOP)
-  printf("[BOOT] Auto-entering STOP mode...\r\n");
-  product_enter_stop_mode();
-  product_recover_after_stop_mode();
-#elif (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
-  if (product_boot_from_standby_wake) {
-      printf("[BOOT] Auto STANDBY skipped after standby wake boot\r\n");
-  } else {
-      printf("[BOOT] Auto-entering STANDBY mode...\r\n");
-      product_enter_standby_mode();
-  }
-#endif
-#endif
 
   micros_init();
 
@@ -3469,10 +3795,46 @@ int main(void)
       }
   }
 
+#if (PRODUCT_UART_DIAG == 1)
+  printf("[UART_DIAG] before runtime dispatch\r\n");
+  HAL_Delay(100);
+#endif
+
+#if (PRODUCT_GPIO_DIAG == 1)
+  product_gpio_diag_blink(5);
+#endif
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
+#if PRODUCT_PC0_USER_ACTION
+    product_init_pc0();
+#endif
+
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+    printf("[BOOT] standby_wake_boot=%d auto_entry=%d low_power_mode=%d\r\n",
+           (int)product_boot_from_standby_wake,
+           (int)PRODUCT_LOW_POWER_AUTO_ENTRY,
+           (int)PRODUCT_LOW_POWER_MODE);
+#endif
+
+#if PRODUCT_LOW_POWER_AUTO_ENTRY && (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+#if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STOP)
+    printf("[BOOT] Auto-entering STOP mode...\r\n");
+    product_enter_stop_mode();
+    product_recover_after_stop_mode();
+#elif (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
+    if (product_boot_from_standby_wake) {
+        printf("[BOOT] Auto STANDBY skipped after standby wake boot\r\n");
+    } else {
+        printf("[BOOT] Auto-entering STANDBY mode...\r\n");
+        product_enter_standby_mode();
+    }
+#endif
+#endif
+
   while (1)
   {
     /* USER CODE END WHILE */

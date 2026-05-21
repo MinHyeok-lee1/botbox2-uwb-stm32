@@ -18,6 +18,9 @@
 #define TWR_GT_TARGET_MM   300U    // set to your jig ground-truth distance in mm
 #define TWR_GT_PRINT_EVERY 100U    // print stats every N samples
 
+#define UWB_DISTANCE_LPF_RECENT_SIZE 5U
+#define UWB_DISTANCE_LPF_MAX_MM      10000L
+
 
 // ============================================================================
 // TWR distance filtering (quality flag + median/outlier + IIR smoothing)
@@ -37,6 +40,15 @@ typedef struct
     uint8_t iir_initialized; // 0: 미초기화, 1: 초기화됨
 } twr_dist_filter_t;
 
+typedef struct
+{
+    int32_t recent[UWB_DISTANCE_LPF_RECENT_SIZE];
+    int32_t estimate_mm;
+    uint8_t count;
+    uint8_t idx;
+    uint8_t initialized;
+} uwb_distance_lpf_t;
+
 static inline long uwb_round_mm(float mm) {
     return (long)((mm >= 0.0f) ? (mm + 0.5f) : (mm - 0.5f));
 }
@@ -46,6 +58,9 @@ extern twr_dist_filter_t* twr_get_filter_by_anchor(uint16_t anchor_id);
 
 void twr_reason_add(char* buf, size_t buf_sz, const char* token);
 void twr_dist_filter_reset(twr_dist_filter_t *f);
+
+void uwb_distance_lpf_reset(uwb_distance_lpf_t *f);
+int32_t uwb_distance_lpf_update_mm(uwb_distance_lpf_t *f, int32_t measurement_mm);
 
 void twr_dist_filter_update_and_log_mm_ex(uint16_t anchor_id,
     uint8_t seq,

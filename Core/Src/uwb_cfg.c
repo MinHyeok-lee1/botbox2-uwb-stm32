@@ -52,6 +52,97 @@ bool uwb_cfg_is_valid(const uwb_cfg_t *cfg) {
     return (calc == cfg->crc32);
 }
 
+/*
+ * Pure Static Logic Validation for UWB Configuration
+ * Validates fields for range/logic errors to prevent incorrect presets/configs
+ * from entering runtime or persisting to Flash. Hardware access is not performed.
+ */
+bool uwb_cfg_validate_logic(const uwb_cfg_t *cfg) {
+    if (cfg == NULL) {
+        printf("[CFG][VAL] Error: NULL configuration pointer\r\n");
+        return false;
+    }
+    if (cfg->magic != UWB_CFG_MAGIC) {
+        printf("[CFG][VAL] Error: Invalid magic number 0x%08lX (expected 0x%08lX)\r\n",
+               (unsigned long)cfg->magic, (unsigned long)UWB_CFG_MAGIC);
+        return false;
+    }
+    if (cfg->version != UWB_CFG_VERSION) {
+        printf("[CFG][VAL] Error: Unsupported version %u (expected %u)\r\n",
+               (unsigned int)cfg->version, (unsigned int)UWB_CFG_VERSION);
+        return false;
+    }
+    if (cfg->length != sizeof(uwb_cfg_t)) {
+        printf("[CFG][VAL] Error: Length mismatch %u (expected %u)\r\n",
+               (unsigned int)cfg->length, (unsigned int)sizeof(uwb_cfg_t));
+        return false;
+    }
+    if (cfg->role > UWB_ROLE_TAG) {
+        printf("[CFG][VAL] Error: Invalid role %u\r\n", (unsigned int)cfg->role);
+        return false;
+    }
+    if (cfg->ranging_mode > UWB_RANGING_MODE_DS) {
+        printf("[CFG][VAL] Error: Invalid ranging mode %u\r\n", (unsigned int)cfg->ranging_mode);
+        return false;
+    }
+    if (cfg->anchor_count == 0 || cfg->anchor_count > 8) {
+        printf("[CFG][VAL] Error: Anchor count %u out of bounds (1-8)\r\n", (unsigned int)cfg->anchor_count);
+        return false;
+    }
+    if (cfg->filter_profile > FILTER_PROFILE_STRONG) {
+        printf("[CFG][VAL] Error: Invalid filter profile %u\r\n", (unsigned int)cfg->filter_profile);
+        return false;
+    }
+    if (cfg->comm_mode > COMM_MODE_MULTICAST) {
+        printf("[CFG][VAL] Error: Invalid communication mode %u\r\n", (unsigned int)cfg->comm_mode);
+        return false;
+    }
+    if (cfg->pan_id == 0x0000 || cfg->pan_id == 0xFFFF) {
+        printf("[CFG][VAL] Error: Reserved/Invalid PAN ID 0x%04X\r\n", (unsigned int)cfg->pan_id);
+        return false;
+    }
+    if (cfg->short_addr == 0x0000 || cfg->short_addr == 0xFFFF) {
+        printf("[CFG][VAL] Error: Reserved/Invalid Short Address 0x%04X\r\n", (unsigned int)cfg->short_addr);
+        return false;
+    }
+
+    // Anchor IDs verification
+    for (uint8_t i = 0; i < cfg->anchor_count; i++) {
+        uint16_t aid = cfg->anchor_ids[i];
+        if (aid == 0x0000 || aid == 0xFFFF) {
+            printf("[CFG][VAL] Error: Invalid Anchor ID 0x%04X at index %u\r\n", (unsigned int)aid, (unsigned int)i);
+            return false;
+        }
+
+        // Self-polling check for TAG
+        if (cfg->role == UWB_ROLE_TAG && aid == cfg->short_addr) {
+            printf("[CFG][VAL] Error: Self-polling detected. TAG Short Address 0x%04X found in anchor_ids[%u]\r\n",
+                   (unsigned int)cfg->short_addr, (unsigned int)i);
+            return false;
+        }
+
+        // Duplicate anchor check
+        for (uint8_t j = i + 1; j < cfg->anchor_count; j++) {
+            if (aid == cfg->anchor_ids[j]) {
+                printf("[CFG][VAL] Error: Duplicate Anchor ID 0x%04X detected at indices %u and %u\r\n",
+                       (unsigned int)aid, (unsigned int)i, (unsigned int)j);
+                return false;
+            }
+        }
+    }
+
+    // CRC validation
+    size_t crc_len = offsetof(uwb_cfg_t, crc32);
+    uint32_t calc = calc_crc32((const uint8_t *)cfg, crc_len);
+    if (calc != cfg->crc32) {
+        printf("[CFG][VAL] Error: CRC32 mismatch. Calculated 0x%08lX, got 0x%08lX\r\n",
+               (unsigned long)calc, (unsigned long)cfg->crc32);
+        return false;
+    }
+
+    return true;
+}
+
 void uwb_cfg_get_default(uwb_cfg_t *out_cfg, uint8_t role) {
     if (!out_cfg) return;
     
@@ -126,7 +217,7 @@ bool uwb_cfg_load(uwb_cfg_t *out_cfg) {
     // Copy to RAM first to avoid misalignment issues on some ARMs, though G4 is usually okay
     memcpy(out_cfg, flash_cfg, sizeof(uwb_cfg_t));
 
-    if (uwb_cfg_is_valid(out_cfg)) {
+    if (uwb_cfg_is_valid(out_cfg) && uwb_cfg_validate_logic(out_cfg)) {
         return true;
     }
 
@@ -134,7 +225,7 @@ bool uwb_cfg_load(uwb_cfg_t *out_cfg) {
 }
 
 bool uwb_cfg_save(const uwb_cfg_t *cfg) {
-    if (!cfg || !uwb_cfg_is_valid(cfg)) return false;
+    if (!cfg || !uwb_cfg_is_valid(cfg) || !uwb_cfg_validate_logic(cfg)) return false;
 
     HAL_FLASH_Unlock();
 
@@ -206,4 +297,3 @@ void uwb_cfg_update_crc(uwb_cfg_t *cfg) {
     size_t crc_len = offsetof(uwb_cfg_t, crc32);
     cfg->crc32 = calc_crc32((const uint8_t *)cfg, crc_len);
 }
-

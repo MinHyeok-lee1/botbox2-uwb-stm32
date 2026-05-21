@@ -83,11 +83,31 @@ typedef struct __attribute__((packed, aligned(4))) {
     uint32_t crc32;         // Integrity check via software CRC
 } uwb_cfg_t;
 
+typedef enum {
+    UWB_CFG_VAL_OK = 0,
+    UWB_CFG_VAL_ERR_NULL,
+    UWB_CFG_VAL_ERR_MAGIC,
+    UWB_CFG_VAL_ERR_VERSION,
+    UWB_CFG_VAL_ERR_LENGTH,
+    UWB_CFG_VAL_ERR_ROLE,
+    UWB_CFG_VAL_ERR_RANGING_MODE,
+    UWB_CFG_VAL_ERR_ANCHOR_COUNT,
+    UWB_CFG_VAL_ERR_FILTER_PROFILE,
+    UWB_CFG_VAL_ERR_COMM_MODE,
+    UWB_CFG_VAL_ERR_PAN_ID,
+    UWB_CFG_VAL_ERR_SHORT_ADDR,
+    UWB_CFG_VAL_ERR_INVALID_ANCHOR_ID,
+    UWB_CFG_VAL_ERR_SELF_POLLING,
+    UWB_CFG_VAL_ERR_DUPLICATE_ANCHOR,
+    UWB_CFG_VAL_ERR_CRC,
+} uwb_cfg_val_err_t;
+
 // Public API
 bool uwb_cfg_load(uwb_cfg_t *out_cfg);
 bool uwb_cfg_save(const uwb_cfg_t *cfg);
 void uwb_cfg_get_default(uwb_cfg_t *out_cfg, uint8_t compiled_role);
 bool uwb_cfg_is_valid(const uwb_cfg_t *cfg);
+bool uwb_cfg_validate_logic(const uwb_cfg_t *cfg);
 void uwb_cfg_factory_reset(uint8_t compiled_role);
 void uwb_cfg_print(const uwb_cfg_t *cfg);
 void uwb_cfg_update_crc(uwb_cfg_t *cfg);

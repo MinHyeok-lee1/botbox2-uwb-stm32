@@ -1,18 +1,5 @@
 # STM32 DW3000 IOC-Shell (현재 상태: 통합 완료)
 
-> [!WARNING]
-> Before starting any task, identify whether it belongs to Customer delivery.
-> This repository is customer-facing. Do not run experiments here.
-> Only promote source/delivery changes that were validated in 02 Product.
-> Do not copy internal antigravity analysis docs into this repository.
-> Do not implement EVB-only or Product-experimental code directly here.
-> 
-> 작업 시작 전에 반드시 이 태스크가 Customer 배포 작업인지 식별하십시오.
-> 본 저장소는 고객 대응용(customer-facing)입니다. 이곳에서 실험을 진행하지 마십시오.
-> 02 Product 저장소에서 검증된 소스/배포 변경 사항만 이곳에 반영(promote)하십시오.
-> 이 저장소에 내부 antigravity 분석 문서를 복사하지 마십시오.
-> EVB 전용 코드나 Product 실험용 코드를 이곳에 직접 구현하지 마십시오.
-
 ## 1. 개요 (Overview)
 본 저장소는 STM32G474RE + DW3000 플랫폼을 위한 통합 UWB 레인징 펌웨어를 포함하고 있습니다. 깨끗한 CubeMX 생성 "IOC Shell"을 기반으로 구축되었으며, 참조 저장소의 UWB 애플리케이션 로직을 성공적으로 이식하여 고안정성 레인징을 검증 완료했습니다.
 
@@ -30,7 +17,6 @@
 2. [PRODUCT_QUICK_START.md](docs/PRODUCT_QUICK_START.md) (빌드 및 프로비저닝)
 3. [PRODUCT_CAN_INTERFACE.md](docs/PRODUCT_CAN_INTERFACE.md) (CAN 프로토콜 요약)
 4. [PRODUCT_PROVISIONING_GUIDE.md](docs/PRODUCT_PROVISIONING_GUIDE.md) (고정 펌웨어 모델 안내)
-5. [Release Governance & Acceptance Summary](docs/reference/CUSTOMER_RELEASE_GOVERNANCE_SUMMARY.md) (릴리스 산출물 확인 및 운영 판단 기준)
 
 > [!NOTE]
 > 상세 내부 개발 이력과 심층 거버넌스는 별도 내부 기술 문서에서 관리합니다.
@@ -47,7 +33,6 @@
 - **프로토콜 안정성:** 에이징 테스트(Burn-in) 결과 99.9% 이상의 레인징 성공률 기록.
 - **타이밍 무결성:** 100% 주기 안정성 (태스크 오버런 발생 제로).
 - **빌드 시스템:** 정의된 CMake 프리셋을 사용한 깨끗한 빌드.
-- **저전력 모드 (Low Power):** PC13/PB5 기반 STOP 모드 진입/기상 기초 구현 완료 (하드웨어 실기 검증 대기중).
 
 ## 6. 하드웨어 설정 (IOC Authority)
 - **SPI1:** DW3000 통신 (`PA4`=CS, `PA15`=RESET).
@@ -60,5 +45,5 @@
 2. **cfg.bin:** 런타임에 보드의 역할(TAG/ANCHOR), ID 및 레인징 파라미터를 결정하는 소형(40바이트) 설정 파일.
 
 ---
-*최종 업데이트: 2026-05-15*
+*최종 업데이트: 2026-04-29*
 *

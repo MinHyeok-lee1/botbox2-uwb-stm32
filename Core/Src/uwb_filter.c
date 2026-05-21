@@ -136,6 +136,114 @@ void twr_dist_filter_reset(twr_dist_filter_t *f)
     memset(f, 0, sizeof(*f));
 }
 
+void uwb_distance_lpf_reset(uwb_distance_lpf_t *f)
+{
+    if (f == NULL) {
+        return;
+    }
+    memset(f, 0, sizeof(*f));
+}
+
+static int32_t uwb_abs_i32(int32_t x)
+{
+    return (x < 0) ? -x : x;
+}
+
+static int32_t uwb_distance_lpf_recent_median(const uwb_distance_lpf_t *f)
+{
+    int32_t tmp[UWB_DISTANCE_LPF_RECENT_SIZE];
+    uint8_t n = f->count;
+
+    for (uint8_t i = 0U; i < n; i++) {
+        tmp[i] = f->recent[i];
+    }
+
+    for (uint8_t i = 1U; i < n; i++) {
+        int32_t key = tmp[i];
+        int8_t j = (int8_t)i - 1;
+        while ((j >= 0) && (tmp[(uint8_t)j] > key)) {
+            tmp[(uint8_t)(j + 1)] = tmp[(uint8_t)j];
+            j--;
+        }
+        tmp[(uint8_t)(j + 1)] = key;
+    }
+
+    return tmp[n / 2U];
+}
+
+static void uwb_distance_lpf_push_recent(uwb_distance_lpf_t *f, int32_t measurement_mm)
+{
+    f->recent[f->idx] = measurement_mm;
+    f->idx = (uint8_t)((f->idx + 1U) % UWB_DISTANCE_LPF_RECENT_SIZE);
+    if (f->count < UWB_DISTANCE_LPF_RECENT_SIZE) {
+        f->count++;
+    }
+}
+
+int32_t uwb_distance_lpf_update_mm(uwb_distance_lpf_t *f, int32_t measurement_mm)
+{
+    if (f == NULL) {
+        return measurement_mm;
+    }
+
+    if ((measurement_mm < 0L) ||
+        (measurement_mm > UWB_DISTANCE_LPF_MAX_MM) ||
+        ((measurement_mm == 0L) && (f->initialized != 0U) && (f->estimate_mm > 100L))) {
+        return (f->initialized != 0U) ? f->estimate_mm : 0L;
+    }
+
+    if (f->initialized == 0U) {
+        f->estimate_mm = measurement_mm;
+        f->initialized = 1U;
+        uwb_distance_lpf_push_recent(f, measurement_mm);
+        return f->estimate_mm;
+    }
+
+    int32_t candidate_mm = measurement_mm;
+    int32_t median_mm = measurement_mm;
+
+    if (f->count > 0U) {
+        median_mm = uwb_distance_lpf_recent_median(f);
+    }
+
+    if (f->count >= UWB_DISTANCE_LPF_RECENT_SIZE) {
+        const int32_t spike_gate_mm = 800L;
+        int32_t median_gap = uwb_abs_i32(measurement_mm - median_mm);
+        int32_t estimate_gap = measurement_mm - f->estimate_mm;
+
+        if (median_gap > spike_gate_mm) {
+            return f->estimate_mm;
+        }
+
+        if (uwb_abs_i32(estimate_gap) > 1200L) {
+            candidate_mm = f->estimate_mm + ((estimate_gap > 0L) ? 1200L : -1200L);
+        }
+    }
+
+    uwb_distance_lpf_push_recent(f, measurement_mm);
+
+    int32_t err = candidate_mm - f->estimate_mm;
+    uint8_t alpha_shift = 3U;
+    int32_t abs_err = uwb_abs_i32(err);
+
+    if (abs_err <= 100L) {
+        alpha_shift = 4U;
+    } else if (abs_err >= 600L) {
+        alpha_shift = 2U;
+    }
+
+    int32_t rounding = (int32_t)1L << (alpha_shift - 1U);
+    int32_t delta = (err >= 0L) ? ((err + rounding) >> alpha_shift)
+                                : -(((-err) + rounding) >> alpha_shift);
+
+    if ((delta == 0L) && (err != 0L)) {
+        delta = (err > 0L) ? 1L : -1L;
+    }
+
+    f->estimate_mm += delta;
+    return f->estimate_mm;
+}
+
 // 내부용: 슬라이딩 윈도우에 샘플 추가
 static void twr_dist_filter_push(twr_dist_filter_t *f, float d_mm)
 {
