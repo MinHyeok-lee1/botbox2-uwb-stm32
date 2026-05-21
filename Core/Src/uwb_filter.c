@@ -142,6 +142,7 @@ void uwb_distance_lpf_reset(uwb_distance_lpf_t *f)
         return;
     }
     memset(f, 0, sizeof(*f));
+    f->base_alpha_permille = UWB_DISTANCE_LPF_BASE_ALPHA_PERMILLE;
 }
 
 static int32_t uwb_abs_i32(int32_t x)
@@ -149,26 +150,22 @@ static int32_t uwb_abs_i32(int32_t x)
     return (x < 0) ? -x : x;
 }
 
-static int32_t uwb_distance_lpf_recent_median(const uwb_distance_lpf_t *f)
+static bool uwb_distance_lpf_is_spike(const uwb_distance_lpf_t *f)
 {
-    int32_t tmp[UWB_DISTANCE_LPF_RECENT_SIZE];
-    uint8_t n = f->count;
-
-    for (uint8_t i = 0U; i < n; i++) {
-        tmp[i] = f->recent[i];
+    if ((f == NULL) || (f->count < 3U)) {
+        return false;
     }
 
-    for (uint8_t i = 1U; i < n; i++) {
-        int32_t key = tmp[i];
-        int8_t j = (int8_t)i - 1;
-        while ((j >= 0) && (tmp[(uint8_t)j] > key)) {
-            tmp[(uint8_t)(j + 1)] = tmp[(uint8_t)j];
-            j--;
-        }
-        tmp[(uint8_t)(j + 1)] = key;
-    }
+    uint8_t i1 = (uint8_t)((f->idx + UWB_DISTANCE_LPF_RECENT_SIZE - 1U) % UWB_DISTANCE_LPF_RECENT_SIZE);
+    uint8_t i2 = (uint8_t)((f->idx + UWB_DISTANCE_LPF_RECENT_SIZE - 2U) % UWB_DISTANCE_LPF_RECENT_SIZE);
+    uint8_t i3 = (uint8_t)((f->idx + UWB_DISTANCE_LPF_RECENT_SIZE - 3U) % UWB_DISTANCE_LPF_RECENT_SIZE);
 
-    return tmp[n / 2U];
+    int32_t d12 = f->recent[i1] - f->recent[i2];
+    int32_t d23 = f->recent[i2] - f->recent[i3];
+
+    return (uwb_abs_i32(d12) > UWB_DISTANCE_LPF_SPIKE_THRESHOLD_MM) &&
+           (uwb_abs_i32(d23) > UWB_DISTANCE_LPF_SPIKE_THRESHOLD_MM) &&
+           (((int64_t)d12 * (int64_t)d23) < 0);
 }
 
 static void uwb_distance_lpf_push_recent(uwb_distance_lpf_t *f, int32_t measurement_mm)
@@ -180,6 +177,63 @@ static void uwb_distance_lpf_push_recent(uwb_distance_lpf_t *f, int32_t measurem
     }
 }
 
+static int32_t uwb_distance_lpf_calculate_wma_mm(const uwb_distance_lpf_t *f)
+{
+    int64_t weighted_sum = 0;
+    int32_t weight_sum = 0;
+    uint8_t n = f->count;
+
+    if (n == 0U) {
+        return f->estimate_mm;
+    }
+
+    if (n > UWB_DISTANCE_LPF_RECENT_SIZE) {
+        n = UWB_DISTANCE_LPF_RECENT_SIZE;
+    }
+
+    for (uint8_t i = 0U; i < n; i++) {
+        uint8_t idx = (uint8_t)((f->idx + UWB_DISTANCE_LPF_RECENT_SIZE - 1U - i) %
+                                UWB_DISTANCE_LPF_RECENT_SIZE);
+        int32_t weight = (int32_t)i + 1L;
+        weighted_sum += (int64_t)f->recent[idx] * (int64_t)weight;
+        weight_sum += weight;
+    }
+
+    if (weight_sum == 0) {
+        return f->estimate_mm;
+    }
+
+    return (int32_t)(weighted_sum / (int64_t)weight_sum);
+}
+
+static int32_t uwb_distance_lpf_dynamic_alpha_permille(const uwb_distance_lpf_t *f,
+                                                       int32_t abs_delta_mm)
+{
+    int64_t alpha = (int64_t)f->base_alpha_permille + ((int64_t)abs_delta_mm * 10);
+
+    if (alpha < UWB_DISTANCE_LPF_MIN_ALPHA_PERMILLE) {
+        alpha = UWB_DISTANCE_LPF_MIN_ALPHA_PERMILLE;
+    }
+    if (alpha > UWB_DISTANCE_LPF_MAX_ALPHA_PERMILLE) {
+        alpha = UWB_DISTANCE_LPF_MAX_ALPHA_PERMILLE;
+    }
+
+    return (int32_t)alpha;
+}
+
+static bool uwb_distance_lpf_should_hard_reset(uwb_distance_lpf_t *f,
+                                               int32_t abs_delta_mm,
+                                               int32_t wma_mm,
+                                               int32_t delta_mm)
+{
+    bool is_trend_break = (((int64_t)f->last_delta_mm * (int64_t)delta_mm) < 0) &&
+                          (abs_delta_mm > UWB_DISTANCE_LPF_TREND_BREAK_MM);
+    bool is_drifting = (uwb_abs_i32(f->estimate_mm - wma_mm) > UWB_DISTANCE_LPF_AVG_DRIFT_MM);
+
+    f->last_delta_mm = delta_mm;
+    return is_trend_break || is_drifting;
+}
+
 int32_t uwb_distance_lpf_update_mm(uwb_distance_lpf_t *f, int32_t measurement_mm)
 {
     if (f == NULL) {
@@ -188,59 +242,42 @@ int32_t uwb_distance_lpf_update_mm(uwb_distance_lpf_t *f, int32_t measurement_mm
 
     if ((measurement_mm < 0L) ||
         (measurement_mm > UWB_DISTANCE_LPF_MAX_MM) ||
-        ((measurement_mm == 0L) && (f->initialized != 0U) && (f->estimate_mm > 100L))) {
-        return (f->initialized != 0U) ? f->estimate_mm : 0L;
+        ((measurement_mm == 0L) && (f->estimate_mm > 100L))) {
+        return f->estimate_mm;
+    }
+
+    int32_t delta_mm = measurement_mm - f->estimate_mm;
+    int32_t abs_delta_mm = uwb_abs_i32(delta_mm);
+
+    uwb_distance_lpf_push_recent(f, measurement_mm);
+
+    if (uwb_distance_lpf_is_spike(f)) {
+        return f->estimate_mm;
+    }
+
+    if (abs_delta_mm > UWB_DISTANCE_LPF_JUMP_THRESHOLD_MM) {
+        f->estimate_mm = (f->estimate_mm + measurement_mm) / 2L;
+        return f->estimate_mm;
+    }
+
+    int32_t wma_mm = uwb_distance_lpf_calculate_wma_mm(f);
+    int32_t dynamic_alpha_permille = uwb_distance_lpf_dynamic_alpha_permille(f, abs_delta_mm);
+
+    if (uwb_distance_lpf_should_hard_reset(f, abs_delta_mm, wma_mm, delta_mm)) {
+        f->initialized = 0U;
+        f->estimate_mm = measurement_mm;
+        return f->estimate_mm;
     }
 
     if (f->initialized == 0U) {
         f->estimate_mm = measurement_mm;
         f->initialized = 1U;
-        uwb_distance_lpf_push_recent(f, measurement_mm);
-        return f->estimate_mm;
+    } else {
+        int64_t retained = (int64_t)(1000L - dynamic_alpha_permille) * (int64_t)f->estimate_mm;
+        int64_t injected = (int64_t)dynamic_alpha_permille * (int64_t)measurement_mm;
+        f->estimate_mm = (int32_t)((retained + injected) / 1000L);
     }
 
-    int32_t candidate_mm = measurement_mm;
-    int32_t median_mm = measurement_mm;
-
-    if (f->count > 0U) {
-        median_mm = uwb_distance_lpf_recent_median(f);
-    }
-
-    if (f->count >= UWB_DISTANCE_LPF_RECENT_SIZE) {
-        const int32_t spike_gate_mm = 800L;
-        int32_t median_gap = uwb_abs_i32(measurement_mm - median_mm);
-        int32_t estimate_gap = measurement_mm - f->estimate_mm;
-
-        if (median_gap > spike_gate_mm) {
-            return f->estimate_mm;
-        }
-
-        if (uwb_abs_i32(estimate_gap) > 1200L) {
-            candidate_mm = f->estimate_mm + ((estimate_gap > 0L) ? 1200L : -1200L);
-        }
-    }
-
-    uwb_distance_lpf_push_recent(f, measurement_mm);
-
-    int32_t err = candidate_mm - f->estimate_mm;
-    uint8_t alpha_shift = 3U;
-    int32_t abs_err = uwb_abs_i32(err);
-
-    if (abs_err <= 100L) {
-        alpha_shift = 4U;
-    } else if (abs_err >= 600L) {
-        alpha_shift = 2U;
-    }
-
-    int32_t rounding = (int32_t)1L << (alpha_shift - 1U);
-    int32_t delta = (err >= 0L) ? ((err + rounding) >> alpha_shift)
-                                : -(((-err) + rounding) >> alpha_shift);
-
-    if ((delta == 0L) && (err != 0L)) {
-        delta = (err > 0L) ? 1L : -1L;
-    }
-
-    f->estimate_mm += delta;
     return f->estimate_mm;
 }
 

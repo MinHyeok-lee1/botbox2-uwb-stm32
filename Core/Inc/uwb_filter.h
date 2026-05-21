@@ -20,6 +20,13 @@
 
 #define UWB_DISTANCE_LPF_RECENT_SIZE 5U
 #define UWB_DISTANCE_LPF_MAX_MM      10000L
+#define UWB_DISTANCE_LPF_MAX_ALPHA_PERMILLE  800L
+#define UWB_DISTANCE_LPF_MIN_ALPHA_PERMILLE   10L
+#define UWB_DISTANCE_LPF_BASE_ALPHA_PERMILLE 500L
+#define UWB_DISTANCE_LPF_JUMP_THRESHOLD_MM    60L
+#define UWB_DISTANCE_LPF_TREND_BREAK_MM       50L
+#define UWB_DISTANCE_LPF_AVG_DRIFT_MM         40L
+#define UWB_DISTANCE_LPF_SPIKE_THRESHOLD_MM   40L
 
 
 // ============================================================================
@@ -44,6 +51,8 @@ typedef struct
 {
     int32_t recent[UWB_DISTANCE_LPF_RECENT_SIZE];
     int32_t estimate_mm;
+    int32_t last_delta_mm;
+    int32_t base_alpha_permille;
     uint8_t count;
     uint8_t idx;
     uint8_t initialized;
