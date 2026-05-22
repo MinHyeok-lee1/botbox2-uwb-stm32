@@ -162,7 +162,8 @@
 
 #### 전력 상태 가시성 (Power-state visibility)
 
-* `[ANC][PWR] enter low-power listen: ...`: 1분 이상 무응답 시 저전력(10% duty-cycle) 진입
+* `[ANC][PWR] enter low-power listen: ...`: 1분 이상 무응답 시 저전력 slow-listen 진입
+* `[ANC][RECOV] enter LOW_POWER_LISTEN: tick=... listen_win=250 sleep_win=2250`: slow-listen 진입 확인용 기본 운영 로그
 * `[ANC][PWR] wake: periodic check`: 저전력 모드 중 주기적(10초) 하트비트(heartbeat)
 * `[ANC][PWR] exit low-power listen: matched poll received`: 저전력 탈출 및 복구
 
@@ -257,7 +258,7 @@ ANCHOR의 저전력 정책 및 로그 가시성 정책은 하드웨어 검증이
 ### 상태 전환 정책
 * `ACTIVE` → `LINK_LOST`: 일치하는 poll이 5초 이상 없을 때
 * `LINK_LOST` → `LOW_POWER_LISTEN`: 추가로 1분 이상 무응답 지속 시
-* `LOW_POWER_LISTEN`: 10% duty-cycle (100ms 수신 / 900ms 수면)
+* `LOW_POWER_LISTEN`: accepted slow-listen window (250ms 수신 / 2250ms 수면)
 * 복구: 어떤 비-ACTIVE 상태에서든 일치하는 poll 수신 시 즉시 `ACTIVE`로 복귀
 
 ### 운영자 로그
@@ -265,6 +266,7 @@ ANCHOR의 저전력 정책 및 로그 가시성 정책은 하드웨어 검증이
 * `[ANC][LINK] lost: still no matched poll for ... ms`: 단절 유지 (5초 주기)
 * `[ANC][LINK] resumed: matched poll received`: 통신 복구
 * `[ANC][PWR] enter low-power listen: ...`: 저전력 진입
+* `[ANC][RECOV] enter LOW_POWER_LISTEN: tick=... listen_win=250 sleep_win=2250`: 저전력 slow-listen 진입 확인
 * `[ANC][PWR] wake: periodic check`: 저전력 중 하트비트 (10초 주기)
 * `[ANC][PWR] exit low-power listen: matched poll received`: 저전력 탈출
 

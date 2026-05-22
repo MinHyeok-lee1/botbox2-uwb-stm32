@@ -1,5 +1,26 @@
 # Customer Release Governance Summary
 
+## Runtime Acceptance Summary (2026-05-22)
+
+This customer release is exported from the finalized Product runtime acceptance state.
+
+- Product source commit: `5465025 fix(product): restore slow-listen entry visibility`
+- Customer export commit: `3cda0a4 chore(customer): export slow-listen entry visibility`
+- Slow-listen accepted window: `ANCHOR_LP_WAKE_INTERVAL_MS=2500U`, `ANCHOR_LP_LISTEN_WINDOW_MS=250U`
+- Slow-listen entry logs:
+  - `[ANC][PWR] enter low-power listen: no matched poll for 60000 ms`
+  - `[ANC][RECOV] enter LOW_POWER_LISTEN: tick=... listen_win=250 sleep_win=2250`
+- LED role acceptance: TAG OFF, `0x2001` RED, `0x2002` BLUE, `0x2003` YELLOW
+- Distance output LPF: legacy `lowpassfilter.h` aligned; CAN/log path uses the filtered distance value
+- Internal documentation remains excluded from the customer package: no `docs/antigravity`, no `docs/task.md`, and no `docs/INTERNAL_REFERENCE.md`
+
+Firmware artifact hashes:
+
+| Artifact | SHA256 |
+| --- | --- |
+| `delivery/firmware.bin` | `263B1F1BE422F23309791EF8DC111D2CDA8ADD42F17CE419B780EA3A5CB69B06` |
+| `delivery/firmware.hex` | `363F9EA3D3C8E7BFC2D794DE803F38CB0808F4FD3F84CA4C60CD6B26AC26562B` |
+
 ## 1. 목적 (Purpose)
 본 문서는 고객이 인도받은 릴리스 산출물을 확인하고, 해당 산출물의 무결성과 릴리스 가능 여부를 판단하는 기준을 이해하도록 돕는 요약 지침입니다. 제품의 기술적 무결성을 보장하기 위한 공식 승인 체계와 운영 절차를 설명합니다.
 
