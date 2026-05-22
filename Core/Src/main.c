@@ -77,8 +77,8 @@
 #define TAG_MIN_GAP_MS         2U    // Safety floor between scans (ms)
 #define TAG_SLOT2_GUARD_US   10000U   // [TEST] Decisive 10ms guard delay before Slot 2 poll
 #define TAG_SLOT3_GUARD_US   10000U   // [TEST] Decisive 10ms guard delay before Slot 3 poll
-#define ANCHOR_LP_WAKE_INTERVAL_MS  1000U // Duty cycle period (ms)
-#define ANCHOR_LP_LISTEN_WINDOW_MS   100U // Active RX window (ms)
+#define ANCHOR_LP_WAKE_INTERVAL_MS  2500U // Accepted slow-listen recovery period (ms)
+#define ANCHOR_LP_LISTEN_WINDOW_MS   250U // Accepted slow-listen active RX window (ms)
 
 #define TAG_SYS_STATUS_HYGIENE_BIT_MASK (SYS_STATUS_TXFRS_BIT_MASK | \
                                           SYS_STATUS_RXFCG_BIT_MASK | \
@@ -556,6 +556,8 @@ static void apply_uwb_clock_or_diag_config(void);
 static uwb_error_codes uwb_lib_init(void);
 static void dw3000_reset(void);
 static uwb_cfg_t g_sys_cfg;
+static void product_role_leds_init(void);
+static void product_role_leds_apply(const uwb_cfg_t *cfg);
 
 /* USER CODE END PFP */
 
@@ -593,6 +595,87 @@ static bool product_standby_request_is_latched(void)
 static inline bool product_gpio_pressed_low(GPIO_TypeDef *port, uint16_t pin)
 {
     return HAL_GPIO_ReadPin(port, pin) == GPIO_PIN_RESET;
+}
+
+#define PRODUCT_LED_41_RED_Pin       LED_LEFT_Pin 
+#define PRODUCT_LED_41_RED_GPIO_Port LED_LEFT_GPIO_Port
+#define PRODUCT_LED_42_BLUE_Pin       LED_RIGHT_Pin
+#define PRODUCT_LED_42_BLUE_GPIO_Port  LED_RIGHT_GPIO_Port
+#define PRODUCT_LED_43_YELLOW_Pin      LED_BACK_Pin
+#define PRODUCT_LED_43_YELLOW_GPIO_Port  LED_BACK_GPIO_Port
+#define PRODUCT_LED_44_GREEN_Pin      LED_SPARE_Pin
+#define PRODUCT_LED_44_GREEN_GPIO_Port    LED_SPARE_GPIO_Port
+
+static void product_role_leds_write_all(GPIO_PinState red,
+                                        GPIO_PinState blue,
+                                        GPIO_PinState yellow,
+                                        GPIO_PinState green)
+{
+    HAL_GPIO_WritePin(PRODUCT_LED_41_RED_GPIO_Port, PRODUCT_LED_41_RED_Pin, red);
+    HAL_GPIO_WritePin(PRODUCT_LED_42_BLUE_GPIO_Port, PRODUCT_LED_42_BLUE_Pin, blue);
+    HAL_GPIO_WritePin(PRODUCT_LED_43_YELLOW_GPIO_Port, PRODUCT_LED_43_YELLOW_Pin, yellow);
+    HAL_GPIO_WritePin(PRODUCT_LED_44_GREEN_GPIO_Port, PRODUCT_LED_44_GREEN_Pin, green);
+}
+
+static void product_role_led_init_one(GPIO_TypeDef *port, uint16_t pin)
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    GPIO_InitStruct.Pin = pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(port, &GPIO_InitStruct);
+}
+
+static void product_role_leds_init(void)
+{
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+
+    product_role_led_init_one(PRODUCT_LED_41_RED_GPIO_Port, PRODUCT_LED_41_RED_Pin);
+    product_role_led_init_one(PRODUCT_LED_42_BLUE_GPIO_Port, PRODUCT_LED_42_BLUE_Pin);
+    product_role_led_init_one(PRODUCT_LED_43_YELLOW_GPIO_Port, PRODUCT_LED_43_YELLOW_Pin);
+    product_role_led_init_one(PRODUCT_LED_44_GREEN_GPIO_Port, PRODUCT_LED_44_GREEN_Pin);
+
+    product_role_leds_write_all(GPIO_PIN_RESET, GPIO_PIN_RESET, GPIO_PIN_RESET, GPIO_PIN_RESET);
+}
+
+static void product_role_leds_apply(const uwb_cfg_t *cfg)
+{
+    product_role_leds_init();
+
+    if ((cfg == NULL) || (cfg->role == UWB_ROLE_TAG)) {
+        product_role_leds_write_all(GPIO_PIN_RESET, GPIO_PIN_RESET, GPIO_PIN_RESET, GPIO_PIN_RESET);
+        printf("[LED] role=TAG color=OFF\r\n");
+        return;
+    }
+
+    if (cfg->role != UWB_ROLE_ANCHOR) {
+        product_role_leds_write_all(GPIO_PIN_RESET, GPIO_PIN_RESET, GPIO_PIN_RESET, GPIO_PIN_RESET);
+        printf("[LED] role=UNKNOWN addr=0x%04X color=OFF\r\n",
+               (unsigned int)((cfg != NULL) ? cfg->short_addr : 0U));
+        return;
+    }
+
+    switch (cfg->short_addr) {
+    case 0x2001U:
+        product_role_leds_write_all(GPIO_PIN_SET, GPIO_PIN_RESET, GPIO_PIN_RESET, GPIO_PIN_RESET);
+        printf("[LED] role=ANCHOR addr=0x%04X color=RED\r\n", (unsigned int)cfg->short_addr);
+        break;
+    case 0x2002U:
+        product_role_leds_write_all(GPIO_PIN_RESET, GPIO_PIN_SET, GPIO_PIN_RESET, GPIO_PIN_RESET);
+        printf("[LED] role=ANCHOR addr=0x%04X color=BLUE\r\n", (unsigned int)cfg->short_addr);
+        break;
+    case 0x2003U:
+        product_role_leds_write_all(GPIO_PIN_RESET, GPIO_PIN_RESET, GPIO_PIN_SET, GPIO_PIN_RESET);
+        printf("[LED] role=ANCHOR addr=0x%04X color=YELLOW\r\n", (unsigned int)cfg->short_addr);
+        break;
+    default:
+        product_role_leds_write_all(GPIO_PIN_RESET, GPIO_PIN_RESET, GPIO_PIN_RESET, GPIO_PIN_RESET);
+        printf("[LED] role=ANCHOR addr=0x%04X color=OFFF\r\n", (unsigned int)cfg->short_addr);
+        break;
+    }
 }
 
 #if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STOP)
@@ -3771,6 +3854,7 @@ int main(void)
 #endif
 
   uwb_cfg_print(&g_sys_cfg);
+  product_role_leds_apply(&g_sys_cfg);
 
   // 2) MCU-level reset and initialization
   bool uwb_ready = false;
