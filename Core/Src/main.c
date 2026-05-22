@@ -2996,9 +2996,11 @@ void anchor_main()
                     }
                     /* B3 Threshold Check: Transition to LOW_POWER_LISTEN */
                     if ((uint32_t)(tick_ms - current_state_entry_ms) >= ANCHOR_LP_TIMEOUT_MS) {
-#if UWB_RUNTIME_VERBOSE_LOGS
                         printf("[ANC][PWR] enter low-power listen: no matched poll for %lu ms\r\n", (unsigned long)ANCHOR_LP_TIMEOUT_MS);
-#endif
+                        printf("[ANC][RECOV] enter LOW_POWER_LISTEN: tick=%lu listen_win=%lu sleep_win=%lu\r\n",
+                               (unsigned long)tick_ms,
+                               (unsigned long)ANCHOR_LP_LISTEN_WINDOW_MS,
+                               (unsigned long)(ANCHOR_LP_WAKE_INTERVAL_MS - ANCHOR_LP_LISTEN_WINDOW_MS));
                         current_state = ANCHOR_STATE_LOW_POWER_LISTEN;
                         current_state_entry_ms = tick_ms;
                         last_duty_ms = tick_ms;
