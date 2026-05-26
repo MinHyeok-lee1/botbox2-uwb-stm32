@@ -1,6 +1,7 @@
 #include "can_controller.h"
 #include "fdcan.h"
 #include "main.h"
+#include <stdio.h>
 
 /**
  * @brief  정수형 데이터 길이를 FDCAN DLC 매크로로 변환하는 내부 헬퍼 함수
@@ -49,8 +50,14 @@ static uint32_t get_fdcan_dlc(uint8_t length) {
  */
 void can_start() {
 
-  if (HAL_FDCAN_Start(&hfdcan1) != HAL_OK) {
-    // Start 실패 시 에러 처리 로직 (예: Error_Handler();)
+  HAL_StatusTypeDef st = HAL_FDCAN_Start(&hfdcan1);
+  if (st != HAL_OK) {
+    printf("[CAN][INIT][ERR] start failed st=%d state=%d err=0x%lX\r\n",
+           (int)st,
+           (int)HAL_FDCAN_GetState(&hfdcan1),
+           (unsigned long)HAL_FDCAN_GetError(&hfdcan1));
+  } else {
+    printf("[CAN][INIT] start ok\r\n");
   }
 }
 

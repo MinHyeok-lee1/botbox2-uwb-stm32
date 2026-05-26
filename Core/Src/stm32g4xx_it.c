@@ -191,6 +191,16 @@ void SysTick_Handler(void)
   /* USER CODE END SysTick_IRQn 1 */
 }
 
+#if PRODUCT_EXPERIMENTAL_STOP1_SLOW_LISTEN
+/**
+  * @brief This function handles LPTIM1 interrupt.
+  */
+void LPTIM1_IRQHandler(void)
+{
+  product_stop1_slow_listen_lptim_irq();
+}
+#endif
+
 
 /**
   * @brief This function handles EXTI line[15:10] interrupts.

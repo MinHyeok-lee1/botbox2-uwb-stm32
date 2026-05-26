@@ -104,17 +104,21 @@ if(DEFINED PRODUCT_UART_SMOKE_KNOWN_GOOD)
     target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE PRODUCT_UART_SMOKE_KNOWN_GOOD=${PRODUCT_UART_SMOKE_KNOWN_GOOD})
 endif()
 
+if(DEFINED PRODUCT_EXPERIMENTAL_STOP1_SLOW_LISTEN)
+    message(STATUS "PRODUCT_EXPERIMENTAL_STOP1_SLOW_LISTEN defined: ${PRODUCT_EXPERIMENTAL_STOP1_SLOW_LISTEN}")
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE PRODUCT_EXPERIMENTAL_STOP1_SLOW_LISTEN=${PRODUCT_EXPERIMENTAL_STOP1_SLOW_LISTEN})
+endif()
+
 list(REMOVE_ITEM CMAKE_C_IMPLICIT_LINK_LIBRARIES ob)
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE
     stm32cubemx
 )
 
-# Post-build: generate .bin and .hex for delivery
-add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-            ${CMAKE_SOURCE_DIR}/delivery
+option(PRODUCT_COPY_DELIVERY_ARTIFACTS "Copy post-build firmware artifacts into delivery/" ON)
 
+# Post-build: always generate local .bin/.hex; release builds copy them to delivery by default.
+set(PRODUCT_POST_BUILD_ARTIFACT_COMMANDS
     COMMAND ${CMAKE_OBJCOPY} -O binary
             $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
             ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
@@ -122,14 +126,27 @@ add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_OBJCOPY} -O ihex
             $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
             ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
+)
 
-    COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
-            ${CMAKE_SOURCE_DIR}/delivery/firmware.bin
+if(PRODUCT_COPY_DELIVERY_ARTIFACTS)
+    message(STATUS "PRODUCT_COPY_DELIVERY_ARTIFACTS enabled")
+    list(APPEND PRODUCT_POST_BUILD_ARTIFACT_COMMANDS
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                ${CMAKE_SOURCE_DIR}/delivery
 
-    COMMAND ${CMAKE_COMMAND} -E copy
-            ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
-            ${CMAKE_SOURCE_DIR}/delivery/firmware.hex
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.bin
+                ${CMAKE_SOURCE_DIR}/delivery/firmware.bin
 
-    COMMENT "Generating and copying .bin and .hex for delivery"
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_CURRENT_BINARY_DIR}/${CMAKE_PROJECT_NAME}.hex
+                ${CMAKE_SOURCE_DIR}/delivery/firmware.hex
+    )
+else()
+    message(STATUS "PRODUCT_COPY_DELIVERY_ARTIFACTS disabled; firmware artifacts stay in the build directory")
+endif()
+
+add_custom_command(TARGET ${CMAKE_PROJECT_NAME} POST_BUILD
+    ${PRODUCT_POST_BUILD_ARTIFACT_COMMANDS}
+    COMMENT "Generating firmware .bin and .hex artifacts"
 )

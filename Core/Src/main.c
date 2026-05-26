@@ -341,6 +341,26 @@ typedef enum {
 #define UWB_DISTANCE_CAN_LOGS 1
 #endif
 
+#ifndef PRODUCT_EXPERIMENTAL_DW3000_SLEEP
+#define PRODUCT_EXPERIMENTAL_DW3000_SLEEP 0
+#endif
+
+#ifndef PRODUCT_EXPERIMENTAL_STOP1_SLOW_LISTEN
+/* Experimental only. Default OFF: S2 MCU RUN + DW3000 RX-OFF/RX enable
+ * remains the release/customer-export baseline. */
+#define PRODUCT_EXPERIMENTAL_STOP1_SLOW_LISTEN 0
+#endif
+
+#if PRODUCT_EXPERIMENTAL_STOP1_SLOW_LISTEN
+#define PRODUCT_STOP1_LPTIM_LSI_HZ 32000U
+#define PRODUCT_STOP1_LPTIM_PRESCALER_DIV 32U
+#define PRODUCT_STOP1_LPTIM_TICK_HZ (PRODUCT_STOP1_LPTIM_LSI_HZ / PRODUCT_STOP1_LPTIM_PRESCALER_DIV)
+#define PRODUCT_STOP1_LPTIM_PRESCALER_BITS (LPTIM_CFGR_PRESC_0 | LPTIM_CFGR_PRESC_2)
+#define PRODUCT_STOP1_LPTIM_ICR_ALL (LPTIM_ICR_CMPMCF | LPTIM_ICR_ARRMCF | LPTIM_ICR_EXTTRIGCF | \
+                                     LPTIM_ICR_CMPOKCF | LPTIM_ICR_ARROKCF | LPTIM_ICR_UPCF | \
+                                     LPTIM_ICR_DOWNCF)
+#endif
+
 union UwbPacket {
   struct __attribute__((__packed__)) {
     uint8_t start;
@@ -558,6 +578,15 @@ static void dw3000_reset(void);
 static uwb_cfg_t g_sys_cfg;
 static void product_role_leds_init(void);
 static void product_role_leds_apply(const uwb_cfg_t *cfg);
+#if PRODUCT_EXPERIMENTAL_DW3000_SLEEP
+static void product_dw3000_sleep_enter(uint32_t tick_ms, uint32_t sleep_window_ms);
+static void product_dw3000_sleep_wake_and_rearm(uint32_t tick_ms);
+#endif
+#if PRODUCT_EXPERIMENTAL_STOP1_SLOW_LISTEN
+static bool product_stop1_slow_listen_gap(uint32_t tick_ms, uint32_t gap_ms);
+static bool product_stop1_slow_listen_lptim_arm(uint32_t gap_ms);
+static void product_stop1_slow_listen_lptim_stop(void);
+#endif
 
 /* USER CODE END PFP */
 
@@ -677,6 +706,135 @@ static void product_role_leds_apply(const uwb_cfg_t *cfg)
         break;
     }
 }
+
+#if PRODUCT_EXPERIMENTAL_DW3000_SLEEP
+static void product_dw3000_sleep_enter(uint32_t tick_ms, uint32_t sleep_window_ms)
+{
+    dwt_forcetrxoff();
+    printf("[ANC][DW3000][SLEEP] enter: tick=%lu sleep_win=%lu\r\n",
+           (unsigned long)tick_ms,
+           (unsigned long)sleep_window_ms);
+    dwt_entersleep(DWT_DW_IDLE_RC);
+}
+
+static void product_dw3000_sleep_wake_and_rearm(uint32_t tick_ms)
+{
+    printf("[ANC][DW3000][SLEEP] wake: tick=%lu\r\n", (unsigned long)tick_ms);
+    dwt_wakeup_ic();
+    deca_sleep(2U);
+    dwt_write32bitreg(SYS_STATUS_ID, ANC_SYS_STATUS_HYGIENE_BIT_MASK);
+    dwt_rxenable(DWT_START_RX_IMMEDIATE);
+    printf("[ANC][DW3000][SLEEP] rx re-arm: tick=%lu\r\n", (unsigned long)HAL_GetTick());
+}
+#endif
+
+#if PRODUCT_EXPERIMENTAL_STOP1_SLOW_LISTEN
+static volatile bool product_stop1_lptim_woke = false;
+
+void product_stop1_slow_listen_lptim_irq(void)
+{
+    uint32_t isr = LPTIM1->ISR;
+
+    if ((isr & LPTIM_ISR_ARRM) != 0U) {
+        LPTIM1->ICR = LPTIM_ICR_ARRMCF;
+        product_stop1_lptim_woke = true;
+    }
+}
+
+static bool product_stop1_slow_listen_lptim_arm(uint32_t gap_ms)
+{
+    uint32_t timeout_start = HAL_GetTick();
+    uint32_t arr_ticks;
+
+    if ((gap_ms == 0U) || (PRODUCT_STOP1_LPTIM_TICK_HZ == 0U)) {
+        return false;
+    }
+
+    __HAL_RCC_LSI_ENABLE();
+    while (__HAL_RCC_GET_FLAG(RCC_FLAG_LSIRDY) == RESET) {
+        if ((uint32_t)(HAL_GetTick() - timeout_start) > 100U) {
+            return false;
+        }
+    }
+
+    /* LSI is conservative for STOP1 feasibility. TODO Phase 84F validation:
+     * measure LSI drift against the accepted 2500ms slow-listen cadence. */
+    __HAL_RCC_LPTIM1_CONFIG(RCC_LPTIM1CLKSOURCE_LSI);
+    __HAL_RCC_LPTIM1_CLK_ENABLE();
+    __HAL_RCC_LPTIM1_CLK_SLEEP_ENABLE();
+
+    LPTIM1->CR = 0U;
+    LPTIM1->ICR = PRODUCT_STOP1_LPTIM_ICR_ALL;
+    LPTIM1->CFGR = PRODUCT_STOP1_LPTIM_PRESCALER_BITS;
+
+    arr_ticks = ((gap_ms * PRODUCT_STOP1_LPTIM_TICK_HZ) / 1000U);
+    if (arr_ticks == 0U) {
+        arr_ticks = 1U;
+    }
+    if (arr_ticks > 0xFFFFU) {
+        arr_ticks = 0xFFFFU;
+    }
+
+    product_stop1_lptim_woke = false;
+    LPTIM1->CR = LPTIM_CR_ENABLE;
+    LPTIM1->ARR = (uint32_t)(arr_ticks - 1U);
+
+    timeout_start = HAL_GetTick();
+    while ((LPTIM1->ISR & LPTIM_ISR_ARROK) == 0U) {
+        if ((uint32_t)(HAL_GetTick() - timeout_start) > 100U) {
+            product_stop1_slow_listen_lptim_stop();
+            return false;
+        }
+    }
+
+    LPTIM1->ICR = PRODUCT_STOP1_LPTIM_ICR_ALL;
+    LPTIM1->IER = LPTIM_IER_ARRMIE;
+    HAL_NVIC_SetPriority(LPTIM1_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(LPTIM1_IRQn);
+    LPTIM1->CR |= LPTIM_CR_SNGSTRT;
+
+    return true;
+}
+
+static void product_stop1_slow_listen_lptim_stop(void)
+{
+    HAL_NVIC_DisableIRQ(LPTIM1_IRQn);
+    LPTIM1->IER = 0U;
+    LPTIM1->ICR = PRODUCT_STOP1_LPTIM_ICR_ALL;
+    LPTIM1->CR = 0U;
+}
+
+static bool product_stop1_slow_listen_gap(uint32_t tick_ms, uint32_t gap_ms)
+{
+    dwt_forcetrxoff();
+    dwt_write32bitreg(SYS_STATUS_ID, ANC_SYS_STATUS_HYGIENE_BIT_MASK);
+
+    printf("[ANC][STOP1] arm lptim gap=%lu\r\n", (unsigned long)gap_ms);
+    if (!product_stop1_slow_listen_lptim_arm(gap_ms)) {
+        printf("[ANC][STOP1] arm failed: fallback RUN gap\r\n");
+        return false;
+    }
+
+    printf("[ANC][STOP1] enter\r\n");
+    HAL_SuspendTick();
+    HAL_PWREx_EnterSTOP1Mode(PWR_STOPENTRY_WFI);
+    SystemClock_Config();
+    HAL_ResumeTick();
+    product_stop1_slow_listen_lptim_stop();
+
+    MX_LPUART1_UART_Init();
+    printf("[ANC][STOP1] wake\r\n");
+    printf("[ANC][STOP1] restore done\r\n");
+
+    if (!product_stop1_lptim_woke) {
+        printf("[ANC][STOP1] wake source not confirmed tick=%lu\r\n", (unsigned long)tick_ms);
+    }
+
+    dwt_write32bitreg(SYS_STATUS_ID, ANC_SYS_STATUS_HYGIENE_BIT_MASK);
+    dwt_rxenable(DWT_START_RX_IMMEDIATE);
+    return true;
+}
+#endif
 
 #if (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STOP)
 static int product_low_power_request_pending(void)
@@ -862,11 +1020,11 @@ static void product_enter_standby_mode(void)
     fflush(stdout);
     HAL_Delay(75);
 
-    product_prepare_peripherals_for_standby();
-    
     if (!product_config_pc13_standby_wkup2()) {
         return;
     }
+
+    product_prepare_peripherals_for_standby();
 
     printf("[PWR][STBY] wake pin armed\r\n");
     fflush(stdout);
@@ -2474,6 +2632,7 @@ static void uwb_can_send_anchor_distance_mm(uint16_t aid, long dist_mm)
 {
 #if UWB_DISTANCE_CAN_LOGS
     union UwbPacket pkt;
+    long logged_dist_mm = dist_mm;
     pkt.start = 0xAA;
     
     /* Clamp distance to int16 range */
@@ -2484,15 +2643,41 @@ static void uwb_can_send_anchor_distance_mm(uint16_t aid, long dist_mm)
     pkt.checksum = pkt.byteStream[0] ^ pkt.byteStream[1] ^ pkt.byteStream[2];
     
     uint32_t can_id = 0x200U + (aid & 0x0FU);
-    HAL_StatusTypeDef st = can_tx_msg(can_id, pkt.byteStream, 4);
-    
-#if UWB_RUNTIME_VERBOSE_LOGS
-    if (st != HAL_OK) {
-        printf("\r\n[CAN][ERR] AID=0x%04X dist=%ldmm st=%d", (unsigned int)aid, dist_mm, (int)st);
+    uint32_t now_ms = HAL_GetTick();
+    static uint32_t s_can_tx_log_count = 0U;
+    static uint32_t s_can_tx_last_log_ms = 0U;
+    bool log_tx = (s_can_tx_log_count < 8U) ||
+                  ((uint32_t)(now_ms - s_can_tx_last_log_ms) >= 1000U);
+
+    if (log_tx) {
+        printf("[CAN][TX] id=0x%lX dist=%ld\r\n",
+               (unsigned long)can_id,
+               logged_dist_mm);
     }
-#else
-    (void)st;
-#endif
+
+    HAL_StatusTypeDef st = can_tx_msg(can_id, pkt.byteStream, 4);
+
+    if ((st != HAL_OK) || log_tx) {
+        uint32_t free_level = HAL_FDCAN_GetTxFifoFreeLevel(&hfdcan1);
+        uint32_t err = HAL_FDCAN_GetError(&hfdcan1);
+        if (st == HAL_OK) {
+            printf("[CAN][TX] ok id=0x%lX free=%lu err=0x%lX\r\n",
+                   (unsigned long)can_id,
+                   (unsigned long)free_level,
+                   (unsigned long)err);
+        } else {
+            printf("[CAN][TX][ERR] id=0x%lX st=%d free=%lu err=0x%lX\r\n",
+                   (unsigned long)can_id,
+                   (int)st,
+                   (unsigned long)free_level,
+                   (unsigned long)err);
+        }
+    }
+
+    if (log_tx) {
+        s_can_tx_log_count++;
+        s_can_tx_last_log_ms = now_ms;
+    }
 #endif
 }
 
@@ -2958,13 +3143,30 @@ void anchor_main()
         }
 
         /* --- Polling loop with Link-State Timeout Check --- */
+#if PRODUCT_EXPERIMENTAL_DW3000_SLEEP
+        uint32_t status = 0U;
+#else
         uint32_t status;
+#endif
         do
         {
-            status = dwt_read32bitreg(SYS_STATUS_ID);
-            
-            /* --- B3: Link State Management (Duty-Cycle Support) --- */
             uint32_t tick_ms = HAL_GetTick();
+
+#if PRODUCT_EXPERIMENTAL_DW3000_SLEEP
+            if ((current_state == ANCHOR_STATE_LOW_POWER_LISTEN) && !is_listening) {
+                if ((uint32_t)(tick_ms - last_duty_ms) >= (ANCHOR_LP_WAKE_INTERVAL_MS - ANCHOR_LP_LISTEN_WINDOW_MS)) {
+                    is_listening = true;
+                    last_duty_ms = tick_ms;
+                    product_dw3000_sleep_wake_and_rearm(tick_ms);
+                } else {
+                    continue;
+                }
+            }
+#endif
+
+            status = dwt_read32bitreg(SYS_STATUS_ID);
+
+            /* --- B3: Link State Management (Duty-Cycle Support) --- */
             switch (current_state) {
                 case ANCHOR_STATE_ACTIVE:
                     if ((uint32_t)(tick_ms - last_matched_ms) >= ANCHOR_LINK_TIMEOUT_MS) {
@@ -3016,7 +3218,18 @@ void anchor_main()
                         if ((uint32_t)(tick_ms - last_duty_ms) >= ANCHOR_LP_LISTEN_WINDOW_MS) {
                             is_listening = false;
                             last_duty_ms = tick_ms;
+#if PRODUCT_EXPERIMENTAL_STOP1_SLOW_LISTEN
+                            if (product_stop1_slow_listen_gap(tick_ms,
+                                                              (ANCHOR_LP_WAKE_INTERVAL_MS - ANCHOR_LP_LISTEN_WINDOW_MS))) {
+                                is_listening = true;
+                                last_duty_ms = HAL_GetTick();
+                            }
+#elif PRODUCT_EXPERIMENTAL_DW3000_SLEEP
+                            product_dw3000_sleep_enter(tick_ms,
+                                                       (ANCHOR_LP_WAKE_INTERVAL_MS - ANCHOR_LP_LISTEN_WINDOW_MS));
+#else
                             dwt_forcetrxoff(); /* Localized Radio OFF */
+#endif
                         }
                     } else {
                         /* In sleep window: check if it's time to wake */

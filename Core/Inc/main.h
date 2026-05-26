@@ -46,6 +46,11 @@ extern "C" {
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
+#ifndef PRODUCT_EXPERIMENTAL_STOP1_SLOW_LISTEN
+/* Product-only experiment. Default OFF: release/customer-export builds keep
+ * the accepted S2 MCU RUN + DW3000 RX-OFF/RX enable slow-listen fallback. */
+#define PRODUCT_EXPERIMENTAL_STOP1_SLOW_LISTEN 0
+#endif
 
 /* USER CODE END EM */
 
@@ -53,6 +58,9 @@ extern "C" {
 void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
+#if PRODUCT_EXPERIMENTAL_STOP1_SLOW_LISTEN
+void product_stop1_slow_listen_lptim_irq(void);
+#endif
 
 /* USER CODE END EFP */
 
