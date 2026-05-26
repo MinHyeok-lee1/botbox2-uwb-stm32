@@ -13,6 +13,14 @@ This Customer repo includes a delivery-safe copy of the Product command helper.
 
 ## Common Commands
 
+Workflow-level field command:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 customer-flash -Role anc1 -Mode ds -Sn <SN>
+```
+
+Low-level commands:
+
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 -Help
 powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 status -Repo customer

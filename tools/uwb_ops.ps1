@@ -1,6 +1,6 @@
 param(
     [Parameter(Position = 0)]
-    [ValidateSet("help", "status", "build", "gate", "list-stlink", "flash", "flash-all-ds", "flash-all-ss", "experiment-build-stop1", "export-customer", "hash-delivery", "capture-log")]
+    [ValidateSet("help", "status", "build", "gate", "list-stlink", "flash", "flash-all-ds", "flash-all-ss", "experiment-build-stop1", "export-customer", "hash-delivery", "capture-log", "product-test", "promote-customer", "customer-flash")]
     [string]$Command = "help",
 
     [ValidateSet("evb", "product", "customer")]
@@ -58,6 +58,12 @@ $CfgMap = @{
 function Show-Help {
     Write-Host "UWB STM32 operation helper"
     Write-Host ""
+    Write-Host "Workflow examples:"
+    Write-Host "  powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 product-test -Role anc1 -Mode ds -Sn 0032002E3234510A37333934 -Port COM18 -DurationSec 60"
+    Write-Host "  powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 promote-customer"
+    Write-Host "  powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 promote-customer -Apply"
+    Write-Host "  powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 customer-flash -Role anc1 -Mode ds -Sn 0032002E3234510A37333934"
+    Write-Host ""
     Write-Host "Examples:"
     Write-Host "  powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 status -Repo product"
     Write-Host "  powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 build -Repo product -Preset Release"
@@ -79,6 +85,9 @@ function Show-Help {
     Write-Host "  export-customer prints the official command by default; use -Apply to run it."
     Write-Host "  experiment-build-stop1 uses build\stop1-experiment and PRODUCT_COPY_DELIVERY_ARTIFACTS=OFF."
     Write-Host "  capture-log writes under artifacts by default and requires -Port and -Name."
+    Write-Host "  product-test builds Product Release, flashes, and optionally captures UART logs."
+    Write-Host "  promote-customer is dry-run unless -Apply is supplied."
+    Write-Host "  customer-flash flashes Customer delivery firmware; it does not build, gate, or export."
 }
 
 function Get-RepoPath([string]$Name) {
@@ -114,6 +123,79 @@ function Get-FlashCfg([string]$ModeName, [string]$RoleName) {
         throw "Unknown role: $RoleName"
     }
     return $CfgMap[$ModeName][$RoleName]
+}
+
+function Assert-RoleAndSn([string]$WorkflowName) {
+    if ([string]::IsNullOrWhiteSpace($Role)) {
+        throw "$WorkflowName requires -Role tag|anc1|anc2|anc3."
+    }
+    if ([string]::IsNullOrWhiteSpace($Sn)) {
+        throw "$WorkflowName requires -Sn <ST-LINK-SN>."
+    }
+}
+
+function Get-CanIdForRole([string]$RoleName) {
+    switch ($RoleName) {
+        "anc1" { return "0x201" }
+        "anc2" { return "0x202" }
+        "anc3" { return "0x203" }
+        default { return $null }
+    }
+}
+
+function Show-PostFlashPatterns([string]$RoleName) {
+    Write-Host ""
+    Write-Host "Check these runtime patterns:" -ForegroundColor Cyan
+    if ($RoleName -eq "tag") {
+        Write-Host "  [TAG][MULTI] 3/3"
+        Write-Host "  A0[2001]:DS_OK"
+        Write-Host "  A1[2002]:DS_OK"
+        Write-Host "  A2[2003]:DS_OK"
+        return
+    }
+
+    $canId = Get-CanIdForRole $RoleName
+    Write-Host "  [CAN][INIT] start ok"
+    Write-Host "  [CAN][TX] ok id=$canId"
+    Write-Host "  [ANC][DS][DIST] ... can_id=$canId"
+}
+
+function Get-CustomerDirtySource([string[]]$DirtyLines) {
+    $sourcePatterns = @(
+        'Core[/\\]',
+        'Drivers[/\\]',
+        'Middlewares[/\\]',
+        'cmake[/\\]',
+        'CMakeLists\.txt',
+        'CMakePresets\.json',
+        'STM32.*\.ioc'
+    )
+
+    return $DirtyLines | Where-Object {
+        $line = $_
+        $sourcePatterns | Where-Object { $line -match $_ }
+    }
+}
+
+function Show-CustomerFlashExample {
+    Write-Host ""
+    Write-Host "Customer flash example:" -ForegroundColor Cyan
+    Write-Host "  powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 customer-flash -Role anc1 -Mode ds -Sn 0032002E3234510A37333934"
+}
+
+function Get-GitStatusShort([string]$RepoName) {
+    $path = Get-RepoPath $RepoName
+    $safePath = $path -replace '\\', '/'
+    Push-Location $path
+    try {
+        $lines = @(git -c "safe.directory=$safePath" status --short)
+        if ($LASTEXITCODE -ne 0) {
+            throw "git status failed for $RepoName."
+        }
+        return $lines
+    } finally {
+        Pop-Location
+    }
 }
 
 function Invoke-FlashOne([string]$RepoName, [string]$RoleName, [string]$ModeName, [string]$Serial) {
@@ -252,6 +334,109 @@ function Invoke-CaptureLog([string]$RepoName, [string]$ComPort, [string]$LogName
     }
 }
 
+function Invoke-ProductTest {
+    Assert-RoleAndSn "product-test"
+
+    Write-Host "WARNING: product-test runs Product Release build. Release build can refresh delivery\firmware.bin and delivery\firmware.hex." -ForegroundColor Yellow
+    Invoke-InRepo "product" {
+        cmake --preset Release
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        cmake --build "build\Release" --parallel 8
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    }
+
+    Invoke-FlashOne "product" $Role $Mode $Sn
+
+    if ([string]::IsNullOrWhiteSpace($Port)) {
+        Write-Host "No -Port supplied. UART capture skipped; verify logs manually on the selected COM port." -ForegroundColor Yellow
+    } else {
+        $captureName = $Name
+        if ([string]::IsNullOrWhiteSpace($captureName)) {
+            $captureName = $Role
+        }
+        Invoke-CaptureLog "product" $Port $captureName $Baud $DurationSec $OutDir
+    }
+
+    Show-PostFlashPatterns $Role
+}
+
+function Invoke-PromoteCustomer {
+    $evbPath = Get-RepoPath "evb"
+    $script = Join-Path $evbPath "tools\export_product_to_customer.ps1"
+    if (-not (Test-Path $script)) {
+        throw "Official export script not found: $script"
+    }
+
+    Write-Host "Product status:" -ForegroundColor Cyan
+    $productDirty = @(Get-GitStatusShort "product")
+    if ($productDirty.Count -eq 0) {
+        Write-Host "  clean"
+    } else {
+        $productDirty | ForEach-Object { Write-Host "  $_" }
+    }
+
+    Write-Host "Customer pre-export status:" -ForegroundColor Cyan
+    $customerDirty = @(Get-GitStatusShort "customer")
+    if ($customerDirty.Count -eq 0) {
+        Write-Host "  clean"
+    } else {
+        $customerDirty | ForEach-Object { Write-Host "  $_" }
+    }
+
+    $dirtySource = @(Get-CustomerDirtySource $customerDirty)
+    if ($dirtySource.Count -gt 0) {
+        Write-Host "Customer source-like files are dirty. Export is blocked until reviewed:" -ForegroundColor Red
+        $dirtySource | ForEach-Object { Write-Host "  $_" }
+        exit 1
+    }
+
+    $exportCommand = "powershell -ExecutionPolicy Bypass -File .\tools\export_product_to_customer.ps1 -Apply -SkipStatusCheck -SkipContractCheck"
+
+    if (-not $Apply) {
+        Write-Host ""
+        Write-Host "Dry-run only. No gate, export, build, or flash was executed." -ForegroundColor Yellow
+        Write-Host "Planned Product gate:"
+        Write-Host "  powershell -ExecutionPolicy Bypass -File .\tools\run_release_acceptance_gates.ps1"
+        Write-Host "Planned official export from EVB repo:"
+        Write-Host "  $exportCommand"
+        Show-CustomerFlashExample
+        return
+    }
+
+    Invoke-InRepo "product" {
+        powershell -ExecutionPolicy Bypass -File ".\tools\run_release_acceptance_gates.ps1"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    }
+
+    Push-Location $evbPath
+    try {
+        Show-Command $exportCommand
+        powershell -ExecutionPolicy Bypass -File ".\tools\export_product_to_customer.ps1" -Apply -SkipStatusCheck -SkipContractCheck
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    } finally {
+        Pop-Location
+    }
+
+    Invoke-InRepo "product" {
+        powershell -ExecutionPolicy Bypass -File ".\tools\run_release_acceptance_gates.ps1"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    }
+
+    Show-CustomerFlashExample
+}
+
+function Invoke-CustomerFlash {
+    Assert-RoleAndSn "customer-flash"
+
+    Invoke-InRepo "customer" {
+        Get-FileHash ".\delivery\firmware.bin" -Algorithm SHA256
+        Get-FileHash ".\delivery\firmware.hex" -Algorithm SHA256
+    }
+
+    Invoke-FlashOne "customer" $Role $Mode $Sn
+    Show-PostFlashPatterns $Role
+}
+
 if ($Help -or $Command -eq "help") {
     Show-Help
     exit 0
@@ -358,5 +543,14 @@ switch ($Command) {
     }
     "capture-log" {
         Invoke-CaptureLog $Repo $Port $Name $Baud $DurationSec $OutDir
+    }
+    "product-test" {
+        Invoke-ProductTest
+    }
+    "promote-customer" {
+        Invoke-PromoteCustomer
+    }
+    "customer-flash" {
+        Invoke-CustomerFlash
     }
 }

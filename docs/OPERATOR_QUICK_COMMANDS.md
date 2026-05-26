@@ -4,6 +4,32 @@ Customer is a delivery/field validation repo. Use these commands for status, fla
 
 All commands are Windows PowerShell one-line commands. Do not use Bash line continuation.
 
+## Start Here
+
+### 1. Customer ANCHOR1 Flash
+
+Use this for the common field validation flash. Risk: flashes Customer `delivery\firmware.bin` and selected cfg to the target board.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 customer-flash -Role anc1 -Mode ds -Sn 0032002E3234510A37333934
+```
+
+### 2. Customer Hash Check
+
+Use this before or after flashing to record the delivery firmware identity. Risk: read-only.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 hash-delivery -Repo customer
+```
+
+### 3. Customer Log Capture
+
+Use this to save UART logs under `artifacts/` instead of the repo root. Risk: read-only serial capture.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 capture-log -Repo customer -Port COM18 -Name anchor1 -DurationSec 60
+```
+
 ## Status
 
 Use in Customer repo. Risk: read-only.
@@ -33,7 +59,7 @@ powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 hash-delivery -Repo
 Use in Customer repo. Risk: flashes board and writes cfg to target flash. Confirm ST-LINK SN before running.
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 flash -Repo customer -Role anc1 -Mode ds -Sn 0032002E3234510A37333934
+powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 customer-flash -Role anc1 -Mode ds -Sn 0032002E3234510A37333934
 ```
 
 DS cfg mapping:
