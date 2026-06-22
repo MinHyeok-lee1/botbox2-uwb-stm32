@@ -64,7 +64,7 @@
 
 ### 3-2. Full Provisioning (Validated Copy-Paste)
 ```powershell
-.\tools\provision.ps1 -sn 002E002B3234511137333934 -fw delivery\firmware.bin -cfg delivery\configs\anc_a2001_ss_p2001.bin
+.\tools\provision.ps1 -sn 004500403234511137333934 -fw delivery\firmware.bin -cfg delivery\configs\anc_a2001_ss_p2001.bin
 .\tools\provision.ps1 -sn 0027003F3234510F37333934 -fw delivery\firmware.bin -cfg delivery\configs\anc_a2002_ss_p2001.bin
 .\tools\provision.ps1 -sn 003D002A3234511137333934 -fw delivery\firmware.bin -cfg delivery\configs\anc_a2003_ss_p2001.bin
 .\tools\provision.ps1 -sn 004D003D3234510F37333934 -fw delivery\firmware.bin -cfg delivery\configs\tag_a1001_ss_3a_p2001.bin

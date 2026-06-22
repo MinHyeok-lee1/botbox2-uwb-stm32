@@ -64,19 +64,19 @@
 #define RESP_RX_TO_FINAL_TX_DLY_UUS  1500   // TAG: delay from RESP RX to FINAL TX (reduced from 3000)
 #define FINAL_RX_TIMEOUT_UUS         8000   // ANCHOR: timeout waiting for FINAL (bumped from 5000 for mixed-UWB window margin)
 
-#define TX_ANT_DLY 16385
-#define RX_ANT_DLY 16385
+#define TX_ANT_DLY 16416
+#define RX_ANT_DLY 16416
 
 // ===== Operations Tuning =====
-// ===== Operations Tuning =====
 #define ANCHOR_LINK_TIMEOUT_MS  5000U  // Initial threshold for "Lost" state (ms)
+#define ANCHOR_COMM_LOST_MARK_MS 1000U  // Send -1 after this much silence, then keepalive at 1 Hz
 #define ANCHOR_LOST_LOG_MS      5000U  // Interval for "Still Lost" reminders (ms)
 #define ANCHOR_LP_TIMEOUT_MS   60000U  // Time before entering Low Power Listen (ms)
-#define TAG_RANGING_RATE_HZ    6U    // Target Frequency (Full Scans per second)
-#define TAG_ANCHOR_SLOT_MS    55U    // Per-anchor baseline budget (includes retries)
-#define TAG_MIN_GAP_MS         2U    // Safety floor between scans (ms)
-#define TAG_SLOT2_GUARD_US   10000U   // [TEST] Decisive 10ms guard delay before Slot 2 poll
-#define TAG_SLOT3_GUARD_US   10000U   // [TEST] Decisive 10ms guard delay before Slot 3 poll
+#define TAG_RANGING_RATE_HZ    4U    // Target Frequency (Full Scans per second)
+#define TAG_ANCHOR_SLOT_MS    65U    // Per-anchor baseline budget (includes retries)
+#define TAG_MIN_GAP_MS         5U    // Safety floor between scans (ms)
+#define TAG_SLOT2_GUARD_US   7500U   // [TEST] Decisive 7.5ms guard delay before Slot 2 poll
+#define TAG_SLOT3_GUARD_US   7500U   // [TEST] Decisive 7.5ms guard delay before Slot 3 poll
 #define ANCHOR_LP_WAKE_INTERVAL_MS  2500U // Accepted slow-listen recovery period (ms)
 #define ANCHOR_LP_LISTEN_WINDOW_MS   250U // Accepted slow-listen active RX window (ms)
 
@@ -315,7 +315,21 @@ typedef enum {
   #define THIS_ROLE_STR   "UNK"
 #endif
 
+#ifndef DS_TWR_VERBOSE
 #define DS_TWR_VERBOSE 0
+#endif
+
+#ifndef UWB_RXDIAG_LOG_ENABLE
+#define UWB_RXDIAG_LOG_ENABLE 0
+#endif
+
+#ifndef UWB_VERBOSE_TAG_DIAG_LOG_ENABLE
+#define UWB_VERBOSE_TAG_DIAG_LOG_ENABLE 0
+#endif
+
+#ifndef TAG_VERBOSE_LOGS
+#define TAG_VERBOSE_LOGS UWB_VERBOSE_TAG_DIAG_LOG_ENABLE
+#endif
 
 #ifndef UWB_RUNTIME_VERBOSE_LOGS
 #define UWB_RUNTIME_VERBOSE_LOGS 0
@@ -385,12 +399,10 @@ void Error_Handler(void);
 #define NUM_OF_ANCHORS 3U
 #endif
 static twr_dist_filter_t g_twr_dist_filter_by_anchor[NUM_OF_ANCHORS];
-static uwb_distance_lpf_t g_output_dist_filter_by_anchor[NUM_OF_ANCHORS];
 
 // anchor_id -> per-anchor filter 매핑 (구현은 g_sys_cfg 선언 이후에 정의)
 static int8_t twr_anchor_slot_from_id(uint16_t anchor_id);
 twr_dist_filter_t* twr_get_filter_by_anchor(uint16_t anchor_id);
-static uwb_distance_lpf_t* output_distance_filter_by_anchor(uint16_t anchor_id);
 
 // 내부용: 필터 상태 초기화
 
@@ -403,7 +415,6 @@ void twr_dist_filter_init(void)
 {
     for (uint8_t i = 0U; i < NUM_OF_ANCHORS; i++) {
         twr_dist_filter_reset(&g_twr_dist_filter_by_anchor[i]);
-        uwb_distance_lpf_reset(&g_output_dist_filter_by_anchor[i]);
     }
 }
 
@@ -1222,6 +1233,40 @@ static bool dw3000_read_dev_id_with_retry(uint32_t *dev_id_out)
     return false;
 }
 
+#if UWB_RXDIAG_LOG_ENABLE
+static void uwb_rxdiag_print_tag(uint16_t aid, uint16_t dst, const dwt_rxdiag_t *diag)
+{
+    if (diag == NULL) {
+        return;
+    }
+
+    printf("[TAG][RXDIAG] aid=0x%04X dst=0x%04X fp1=%lu fp2=%lu fp3=%lu cir=%lu rxpacc=%lu\r\n",
+           (unsigned int)aid,
+           (unsigned int)dst,
+           (unsigned long)(diag->ipatovF1 & 0x3FFFFFUL),
+           (unsigned long)(diag->ipatovF2 & 0x3FFFFFUL),
+           (unsigned long)(diag->ipatovF3 & 0x3FFFFFUL),
+           (unsigned long)(diag->ipatovPower & 0x1FFFFUL),
+           (unsigned long)diag->ipatovAccumCount);
+}
+
+static void uwb_rxdiag_print_anchor(uint16_t aid, uint16_t src, const dwt_rxdiag_t *diag)
+{
+    if (diag == NULL) {
+        return;
+    }
+
+    printf("[ANC][RXDIAG] aid=0x%04X src=0x%04X fp1=%lu fp2=%lu fp3=%lu cir=%lu rxpacc=%lu\r\n",
+           (unsigned int)aid,
+           (unsigned int)src,
+           (unsigned long)(diag->ipatovF1 & 0x3FFFFFUL),
+           (unsigned long)(diag->ipatovF2 & 0x3FFFFFUL),
+           (unsigned long)(diag->ipatovF3 & 0x3FFFFFUL),
+           (unsigned long)(diag->ipatovPower & 0x1FFFFUL),
+           (unsigned long)diag->ipatovAccumCount);
+}
+#endif
+
 static uwb_error_codes uwb_lib_init(void)
 {
     uint32_t dev_id = 0;
@@ -1255,12 +1300,59 @@ static uwb_error_codes uwb_lib_init(void)
     return UWB_OK;
 }
 
+/* --------------------------------------------------------------------------
+ * RF channel build selector
+ * --------------------------------------------------------------------------
+ * Build with -DUWB_RF_CHANNEL=5 or -DUWB_RF_CHANNEL=9.
+ * The delivery script produces four explicit binaries:
+ *   - firmware_product_ch5.bin
+ *   - firmware_product_ch9.bin
+ *   - firmware_rxdiag_ch5.bin
+ *   - firmware_rxdiag_ch9.bin
+ *
+ * Do not keep channel selection as a commented alternate default_config.
+ * Channel-specific firmware must be distinguishable at the binary filename level
+ * to prevent accidental flashing of the wrong RF channel.
+ */
+#ifndef UWB_RF_CHANNEL
+#define UWB_RF_CHANNEL 5
+#endif
+
+#if (UWB_RF_CHANNEL == 5)
 static dwt_config_t default_config = {
-  5, DWT_PLEN_128, DWT_PAC8, 9, 9, 1,
-  DWT_BR_6M8, DWT_PHRMODE_STD, DWT_PHRRATE_STD,
-  (129 + 8 - 8),
-  DWT_STS_MODE_OFF, DWT_STS_LEN_64, DWT_PDOA_M0
+    .chan = 5,
+    .txPreambLength = DWT_PLEN_128,
+    .rxPAC = DWT_PAC8,
+    .txCode = 9,
+    .rxCode = 9,
+    .sfdType = 1,
+    .dataRate = DWT_BR_6M8,
+    .phrMode = DWT_PHRMODE_STD,
+    .phrRate = DWT_PHRRATE_STD,
+    .sfdTO = (128 + 1 + 8 - 8),
+    .stsMode = DWT_STS_MODE_OFF,
+    .stsLength = DWT_STS_LEN_64,
+    .pdoaMode = DWT_PDOA_M0
 };
+#elif (UWB_RF_CHANNEL == 9)
+static dwt_config_t default_config = {
+    .chan = 9,
+    .txPreambLength = DWT_PLEN_64,
+    .rxPAC = DWT_PAC8,
+    .txCode = 11,
+    .rxCode = 11,
+    .sfdType = DWT_SFD_IEEE_4Z,
+    .dataRate = DWT_BR_6M8,
+    .phrMode = DWT_PHRMODE_STD,
+    .phrRate = DWT_PHRRATE_STD,
+    .sfdTO = (64 + 1 + 8 - 8),
+    .stsMode = DWT_STS_MODE_OFF,
+    .stsLength = DWT_STS_LEN_64,
+    .pdoaMode = DWT_PDOA_M0
+};
+#else
+#error "UWB_RF_CHANNEL must be 5 or 9"
+#endif
 
 uwb_error_codes uwb_lib_cfg(dwt_config_t* config);
 
@@ -1550,20 +1642,6 @@ twr_dist_filter_t* twr_get_filter_by_anchor(uint16_t anchor_id)
     return &g_twr_dist_filter_by_anchor[(uint8_t)slot];
 }
 
-static uwb_distance_lpf_t* output_distance_filter_by_anchor(uint16_t anchor_id)
-{
-    int8_t slot = twr_anchor_slot_from_id(anchor_id);
-
-    if ((slot < 0) && (anchor_id == g_sys_cfg.short_addr)) {
-        slot = 0;
-    }
-
-    if ((slot < 0) || (slot >= (int8_t)NUM_OF_ANCHORS)) {
-        return NULL;
-    }
-
-    return &g_output_dist_filter_by_anchor[(uint8_t)slot];
-}
 
 // Legacy cfg_reset_default_ram and cfg_active_* functions have been removed.
 
@@ -2357,6 +2435,15 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
 #endif
                 dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_TXFRS_BIT_MASK);
 
+#if UWB_RXDIAG_LOG_ENABLE
+                {
+                    dwt_rxdiag_t diag;
+                    memset(&diag, 0, sizeof(diag));
+                    dwt_readdiagnostics(&diag);
+                    uwb_rxdiag_print_tag(dst_short, dst_short, &diag);
+                }
+#endif
+
                 /* DS-TWR Success Cleanup: TAG does NOT compute distance. 
                  * Hardening: Explicit TRX off and status clear ensures no residue for next cycle. */
                 dwt_forcetrxoff();
@@ -2413,6 +2500,9 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
             dwt_rxdiag_t diag;
             memset(&diag, 0, sizeof(diag));
             dwt_readdiagnostics(&diag);
+#if UWB_RXDIAG_LOG_ENABLE
+            uwb_rxdiag_print_tag(dst_short, dst_short, &diag);
+#endif
             // --- RXDIAG RAW log (for host-side visualization) ---
             // NOTE: keep 32-bit safe prints. xtalOffset uses signed 16-bit from dwt_readclockoffset().
 #if defined(TAG_VERBOSE_LOGS) && TAG_VERBOSE_LOGS
@@ -2681,6 +2771,44 @@ static void uwb_can_send_anchor_distance_mm(uint16_t aid, long dist_mm)
 #endif
 }
 
+
+static void uwb_can_send_anchor_comm_lost_mm(uint16_t aid, const char *reason)
+{
+#if UWB_DISTANCE_CAN_LOGS
+    /*
+     * Communication-lost marker policy:
+     * Send -1 mm when a ranging exchange fails or the anchor remains link-lost.
+     * Rate-limit this path so repeated RX timeouts / low-power keepalives do not flood the CAN bus.
+     */
+    uint32_t now_ms = HAL_GetTick();
+    static uint32_t s_comm_lost_last_ms[NUM_OF_ANCHORS] = {0U};
+    int8_t mapped_slot = twr_anchor_slot_from_id(aid);
+    uint8_t slot = 0U;
+
+    if (mapped_slot >= 0) {
+        slot = (uint8_t)mapped_slot;
+    } else {
+        slot = (uint8_t)((aid & 0x0FU) % NUM_OF_ANCHORS);
+    }
+
+    if ((s_comm_lost_last_ms[slot] != 0U) &&
+        ((uint32_t)(now_ms - s_comm_lost_last_ms[slot]) < 1000U)) {
+        return;
+    }
+
+    s_comm_lost_last_ms[slot] = now_ms;
+
+    printf("[ANC][COMM_LOST] AID=0x%04X dist=-1 reason=%s\r\n",
+           (unsigned int)aid,
+           (reason != NULL) ? reason : "unknown");
+
+    uwb_can_send_anchor_distance_mm(aid, -1L);
+#else
+    (void)aid;
+    (void)reason;
+#endif
+}
+
 static void tag_print_multi_anchor_summary(uint8_t n, const bool ok[], const float dist_m[])
 {
     uint8_t ok_cnt = 0U;
@@ -2705,6 +2833,7 @@ static void tag_print_multi_anchor_summary(uint8_t n, const bool ok[], const flo
             printf(" A%u[%04X]:FAIL",
                    (unsigned int)i,
                    (unsigned int)aid);
+            uwb_can_send_anchor_comm_lost_mm(aid, "tag_anchor_fail");
             continue;
         }
 
@@ -2724,11 +2853,11 @@ static void tag_print_multi_anchor_summary(uint8_t n, const bool ok[], const flo
             dist_mm_l = uwb_round_mm(mm_f);
         }
 
-        uwb_distance_lpf_t *of = output_distance_filter_by_anchor(aid);
-        if (of != NULL) {
-            dist_mm_l = (long)uwb_distance_lpf_update_mm(of, (int32_t)dist_mm_l);
-        }
-
+        /*
+         * Raw-distance output policy:
+         * This firmware must forward the measured raw distance to CAN.
+         * Any smoothing/LPF/fusion is handled by the downstream CAN collector.
+         */
         printf(" A%u[%04X]:%ldmm",
                (unsigned int)i,
                (unsigned int)aid,
@@ -3154,6 +3283,9 @@ void anchor_main()
 
 #if PRODUCT_EXPERIMENTAL_DW3000_SLEEP
             if ((current_state == ANCHOR_STATE_LOW_POWER_LISTEN) && !is_listening) {
+                /* Keep CAN -1 alive at 1 Hz even while DW3000 is in the sleep window. */
+                uwb_can_send_anchor_comm_lost_mm(g_sys_cfg.short_addr, "low_power_sleep_window");
+
                 if ((uint32_t)(tick_ms - last_duty_ms) >= (ANCHOR_LP_WAKE_INTERVAL_MS - ANCHOR_LP_LISTEN_WINDOW_MS)) {
                     is_listening = true;
                     last_duty_ms = tick_ms;
@@ -3169,8 +3301,19 @@ void anchor_main()
             /* --- B3: Link State Management (Duty-Cycle Support) --- */
             switch (current_state) {
                 case ANCHOR_STATE_ACTIVE:
+                    if ((uint32_t)(tick_ms - last_matched_ms) >= ANCHOR_COMM_LOST_MARK_MS) {
+                        /*
+                         * Do not treat a single RX timeout/reject/error event as communication loss.
+                         * Report -1 only when there has been no matched POLL for at least 1 second.
+                         * The helper has its own 1 Hz rate limiter, so this remains a periodic
+                         * keepalive until a valid POLL is matched and last_matched_ms is reset.
+                         */
+                        uwb_can_send_anchor_comm_lost_mm(g_sys_cfg.short_addr, "no_matched_poll_1s");
+                    }
+
                     if ((uint32_t)(tick_ms - last_matched_ms) >= ANCHOR_LINK_TIMEOUT_MS) {
                         printf("[ANC][LINK] lost: no matched poll for %lu ms\r\n", (unsigned long)ANCHOR_LINK_TIMEOUT_MS);
+                        uwb_can_send_anchor_comm_lost_mm(g_sys_cfg.short_addr, "link_lost");
                         current_state = ANCHOR_STATE_LINK_LOST;
                         current_state_entry_ms = tick_ms;
                         last_lost_log_ms = tick_ms;
@@ -3190,7 +3333,13 @@ void anchor_main()
                     break;
 
                 case ANCHOR_STATE_LINK_LOST:
-                    /* Still-lost reminders */
+                    /*
+                     * Keep CAN -1 independent from the 5-second human-readable lost log.
+                     * The helper owns the 1 Hz rate limit, so this can be called every loop.
+                     */
+                    uwb_can_send_anchor_comm_lost_mm(g_sys_cfg.short_addr, "link_lost_keepalive");
+
+                    /* Still-lost reminders: log only, do not control CAN -1 cadence. */
                     if ((uint32_t)(tick_ms - last_lost_log_ms) >= ANCHOR_LOST_LOG_MS) {
                         uint32_t total_lost_ms = (uint32_t)(tick_ms - last_matched_ms);
                         printf("[ANC][LINK] lost: still no matched poll for %lu ms\r\n", (unsigned long)total_lost_ms);
@@ -3199,6 +3348,7 @@ void anchor_main()
                     /* B3 Threshold Check: Transition to LOW_POWER_LISTEN */
                     if ((uint32_t)(tick_ms - current_state_entry_ms) >= ANCHOR_LP_TIMEOUT_MS) {
                         printf("[ANC][PWR] enter low-power listen: no matched poll for %lu ms\r\n", (unsigned long)ANCHOR_LP_TIMEOUT_MS);
+                        uwb_can_send_anchor_comm_lost_mm(g_sys_cfg.short_addr, "enter_low_power_listen");
                         printf("[ANC][RECOV] enter LOW_POWER_LISTEN: tick=%lu listen_win=%lu sleep_win=%lu\r\n",
                                (unsigned long)tick_ms,
                                (unsigned long)ANCHOR_LP_LISTEN_WINDOW_MS,
@@ -3212,6 +3362,10 @@ void anchor_main()
                     break;
 
                 case ANCHOR_STATE_LOW_POWER_LISTEN:
+                    /* Keep reporting -1 while low-power listen is active.
+                     * uwb_can_send_anchor_comm_lost_mm() has its own 1s rate limiter. */
+                    uwb_can_send_anchor_comm_lost_mm(g_sys_cfg.short_addr,
+                                                     is_listening ? "low_power_listen" : "low_power_sleep_window");
                     /* B3 (Corrected): Managed Duty Cycle */
                     if (is_listening) {
                         /* In listen window: check if it's time to sleep */
@@ -3498,6 +3652,7 @@ void anchor_main()
             }
 #endif
             g_anc_stat.tx_late++;
+            uwb_can_send_anchor_comm_lost_mm(g_sys_cfg.short_addr, "resp_tx_late");
 #if TWR_ANC_CORR_DEBUG
             twr_stats_maybe_print("[ANC]", &g_anc_stat, 1000U);
             /* Standard CORR line for sch failure */
@@ -3597,6 +3752,9 @@ void anchor_main()
                            (unsigned)rx_buf[ALL_MSG_SN_IDX], (unsigned long)st_final);
                 }
 #endif
+                uwb_can_send_anchor_comm_lost_mm(g_sys_cfg.short_addr,
+                    (st_final & SYS_STATUS_ALL_RX_TO) ? "final_timeout" :
+                    ((st_final & SYS_STATUS_AFFREJ_BIT_MASK) ? "final_rejected" : "final_rx_error"));
                 dwt_forcetrxoff(); /* Defensive recovery: ensure RX engine is fully idle before next cycle */
                 continue;
             }
@@ -3611,6 +3769,7 @@ void anchor_main()
                 dbg_final_mism_burst++;
                 printf("[ANC][DS] FINAL bad len (SN=%u)\r\n", (unsigned)rx_buf[ALL_MSG_SN_IDX]);
 #endif
+                uwb_can_send_anchor_comm_lost_mm(g_sys_cfg.short_addr, "final_bad_len");
                 dwt_forcetrxoff();
                 continue;
             }
@@ -3637,12 +3796,21 @@ void anchor_main()
                 dbg_final_mism_burst++;
                 printf("[ANC][DS] FINAL mismatch (SN=%u)\r\n", (unsigned)rx_buf[ALL_MSG_SN_IDX]);
 #endif
+                uwb_can_send_anchor_comm_lost_mm(g_sys_cfg.short_addr, "final_mismatch");
                 dwt_forcetrxoff();
                 continue;
             }
 
             /* Read anchor-side final_rx timestamp */
             uint32_t anc_final_rx_ts = dwt_readrxtimestamplo32();
+#if UWB_RXDIAG_LOG_ENABLE
+            {
+                dwt_rxdiag_t diag;
+                memset(&diag, 0, sizeof(diag));
+                dwt_readdiagnostics(&diag);
+                uwb_rxdiag_print_anchor(g_sys_cfg.short_addr, final_src_addr, &diag);
+            }
+#endif
 #if DS_ANCHOR_OBS_SUMMARY
             g_anc_obs_summary.final_rx_ok_count++;
 #endif
@@ -3688,18 +3856,32 @@ void anchor_main()
             if (ds_dist > 0.0) {
                 double d_mm = ds_dist * 1000.0;
                 if (d_mm > 2147483647.0) d_mm = 2147483647.0;
-                long ds_dist_mm = (long)d_mm;
-                uwb_distance_lpf_t *of = output_distance_filter_by_anchor(g_sys_cfg.short_addr);
-                if (of != NULL) {
-                    ds_dist_mm = (long)uwb_distance_lpf_update_mm(of, (int32_t)ds_dist_mm);
-                }
 
+                long raw_input_mm = (long)d_mm;
+                long can_dist_mm = raw_input_mm;
+
+                /*
+                 * Raw-distance output policy:
+                 * Do not apply any distance filter in the UWB anchor firmware.
+                 * The CAN collector board is responsible for filtering/fusion.
+                 *
+                 * Keep dist and rawDist identical here so logs and CAN payload
+                 * prove that the transmitted value is the raw DS-TWR distance.
+                 */
                 uint32_t can_id = 0x200U + (g_sys_cfg.short_addr & 0x0FU);
-                uwb_can_send_anchor_distance_mm(g_sys_cfg.short_addr, ds_dist_mm);
-                
+
+                /* CAN에는 raw 거리 전송 */
+                uwb_can_send_anchor_distance_mm(g_sys_cfg.short_addr, can_dist_mm);
+
                 uint16_t final_src = get_u16_le(&final_buf[FINAL_SRC_ADDR_IDX]);
-                printf("[ANC][DS][DIST] AID=0x%04X src=0x%04X dist=%ldmm can_id=0x%lX\r\n",
-                       (unsigned int)g_sys_cfg.short_addr, (unsigned int)final_src, ds_dist_mm, (unsigned long)can_id);
+                printf("[ANC][DS][DIST] AID=0x%04X src=0x%04X dist=%ldmm rawDist=%ldmm can_id=0x%lX\r\n",
+                    (unsigned int)g_sys_cfg.short_addr,
+                    (unsigned int)final_src,
+                    can_dist_mm,
+                    raw_input_mm,
+                    (unsigned long)can_id);
+            } else {
+                uwb_can_send_anchor_comm_lost_mm(g_sys_cfg.short_addr, "invalid_distance");
             }
         } else {
             /* SS-TWR: no further action after RESP TX */
@@ -3724,6 +3906,10 @@ static void uwb_print_radio_params_3lines(void)
     {
         printf("[UWB][ANTD] tx_ant_dly=%u rx_ant_dly=%u\r\n",
                (unsigned)g_tx_antd_set, (unsigned)g_rx_antd_set);
+        printf("[UWB][FW] rf_channel=%u rxdiag=%u verbose_tag_diag=%u\r\n",
+               (unsigned)UWB_RF_CHANNEL,
+               (unsigned)UWB_RXDIAG_LOG_ENABLE,
+               (unsigned)UWB_VERBOSE_TAG_DIAG_LOG_ENABLE);
     }
 
     // (2) CFG: 지금 코드 구조상 uwb_lib_cfg(NULL) -> default_config가 적용됨
@@ -4113,10 +4299,12 @@ int main(void)
 #endif
 
 #if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
-    printf("[BOOT] standby_wake_boot=%d auto_entry=%d low_power_mode=%d\r\n",
-           (int)product_boot_from_standby_wake,
-           (int)PRODUCT_LOW_POWER_AUTO_ENTRY,
-           (int)PRODUCT_LOW_POWER_MODE);
+    printf("[BOOT] standby_wake_boot=%u auto_entry=%u low_power_mode=%u role=0x%02X tag_const=0x%02X\r\n",
+           (unsigned int)product_boot_from_standby_wake,
+           (unsigned int)PRODUCT_LOW_POWER_AUTO_ENTRY,
+           (unsigned int)PRODUCT_LOW_POWER_MODE,
+           (unsigned int)g_sys_cfg.role,
+           (unsigned int)UWB_ROLE_TAG);
 #endif
 
 #if PRODUCT_LOW_POWER_AUTO_ENTRY && (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
@@ -4125,7 +4313,10 @@ int main(void)
     product_enter_stop_mode();
     product_recover_after_stop_mode();
 #elif (PRODUCT_LOW_POWER_MODE == PRODUCT_LOW_POWER_MODE_STANDBY)
-    if (product_boot_from_standby_wake) {
+    if (g_sys_cfg.role != UWB_ROLE_TAG) {
+        printf("[BOOT] Auto STANDBY skipped: role is not TAG (role=0x%02X)\r\n",
+               (unsigned int)g_sys_cfg.role);
+    } else if (product_boot_from_standby_wake) {
         printf("[BOOT] Auto STANDBY skipped after standby wake boot\r\n");
     } else {
         printf("[BOOT] Auto-entering STANDBY mode...\r\n");

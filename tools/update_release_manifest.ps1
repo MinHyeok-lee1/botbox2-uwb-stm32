@@ -120,7 +120,8 @@ if ($Apply) {
         Write-Host "[MANIFEST-UPDATE] No changes to apply." -ForegroundColor Green
     } else {
         Write-Host "[MANIFEST-UPDATE] Applying changes to $ManifestFile..." -ForegroundColor Yellow
-        $NewContent | Out-File -FilePath $ManifestFile -Encoding utf8 -NoNewline
+        $JoinedContent = $NewContent -join [System.Environment]::NewLine
+        $JoinedContent | Out-File -FilePath $ManifestFile -Encoding utf8 -NoNewline
         Write-Host "[MANIFEST-UPDATE] Apply complete. Please verify with verify_delivery_manifest.ps1." -ForegroundColor Green
     }
 } else {

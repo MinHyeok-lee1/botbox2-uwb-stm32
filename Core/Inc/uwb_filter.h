@@ -19,14 +19,26 @@
 #define TWR_GT_PRINT_EVERY 100U    // print stats every N samples
 
 #define UWB_DISTANCE_LPF_RECENT_SIZE 5U
-#define UWB_DISTANCE_LPF_MAX_MM      10000L
-#define UWB_DISTANCE_LPF_MAX_ALPHA_PERMILLE  800L
-#define UWB_DISTANCE_LPF_MIN_ALPHA_PERMILLE   10L
-#define UWB_DISTANCE_LPF_BASE_ALPHA_PERMILLE 500L
-#define UWB_DISTANCE_LPF_JUMP_THRESHOLD_MM    60L
-#define UWB_DISTANCE_LPF_TREND_BREAK_MM       50L
-#define UWB_DISTANCE_LPF_AVG_DRIFT_MM         40L
-#define UWB_DISTANCE_LPF_SPIKE_THRESHOLD_MM   40L
+#define UWB_DISTANCE_LPF_MAX_MM      30000L
+
+#define UWB_DISTANCE_LPF_MAX_ALPHA_PERMILLE  350L
+#define UWB_DISTANCE_LPF_MIN_ALPHA_PERMILLE   50L
+#define UWB_DISTANCE_LPF_BASE_ALPHA_PERMILLE 200L
+
+#define UWB_DISTANCE_LPF_JUMP_THRESHOLD_MM    200L
+#define UWB_DISTANCE_LPF_TREND_BREAK_MM       100L
+#define UWB_DISTANCE_LPF_AVG_DRIFT_MM         80L
+#define UWB_DISTANCE_LPF_SPIKE_THRESHOLD_MM   80L
+#define UWB_DISTANCE_LPF_MAX_STEP_MM          80L
+
+/*
+ * Recovery path for a stale estimate after multipath / FP-glitch events.
+ * If the newest raw samples become stable again but the11 current estimate is
+ * still far away, snap the estimate back to the recent raw average.
+ */
+#define UWB_DISTANCE_LPF_STABLE_COUNT         4U
+#define UWB_DISTANCE_LPF_STABLE_SPREAD_MM     180L
+#define UWB_DISTANCE_LPF_RESYNC_DELTA_MM      180L
 
 
 // ============================================================================

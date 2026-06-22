@@ -6,7 +6,7 @@
             "hidden": true,
             "generator": "Ninja",
             "binaryDir": "${sourceDir}/build/${presetName}",
-		    "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake",
+            "toolchainFile": "${sourceDir}/cmake/gcc-arm-none-eabi.cmake",
             "cacheVariables": {
             }
         },
@@ -23,6 +23,26 @@
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release"
             }
+        },
+        {
+            "name": "Release-rxdiag",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "PRODUCT_COPY_DELIVERY_ARTIFACTS": "OFF",
+                "UWB_RXDIAG_LOG_ENABLE": "ON",
+                "UWB_VERBOSE_TAG_DIAG_LOG_ENABLE": "ON"
+            }
+        },
+        {
+            "name": "Release-standby",
+            "inherits": "default",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "PRODUCT_COPY_DELIVERY_ARTIFACTS": "OFF",
+                "PRODUCT_LOW_POWER_MODE": "2",
+                "PRODUCT_LOW_POWER_AUTO_ENTRY": "1"
+            }
         }
     ],
     "buildPresets": [
@@ -33,6 +53,14 @@
         {
             "name": "Release",
             "configurePreset": "Release"
+        },
+        {
+            "name": "Release-rxdiag",
+            "configurePreset": "Release-rxdiag"
+        },
+        {
+            "name": "Release-standby",
+            "configurePreset": "Release-standby"
         }
     ]
 }

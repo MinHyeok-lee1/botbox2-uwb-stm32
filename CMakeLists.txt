@@ -39,6 +39,8 @@ endif()
 # -----------------------------------------------------------------------------
 
 option(UWB_USE_USER_CFG_FILE "Enable uwb_user_cfg.h override" OFF)
+option(UWB_RXDIAG_LOG_ENABLE "Enable UWB RX diagnostic telemetry logs" OFF)
+option(UWB_VERBOSE_TAG_DIAG_LOG_ENABLE "Enable verbose UWB TAG diagnostic logs" OFF)
 
 if(UWB_USE_USER_CFG_FILE)
     message(STATUS "UWB user config ENABLED")
@@ -63,6 +65,16 @@ target_include_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE
     ${UWB_ROLE_DEFINE}
 )
+
+if(UWB_RXDIAG_LOG_ENABLE)
+    message(STATUS "UWB_RXDIAG_LOG_ENABLE enabled")
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE UWB_RXDIAG_LOG_ENABLE=1)
+endif()
+
+if(UWB_VERBOSE_TAG_DIAG_LOG_ENABLE)
+    message(STATUS "UWB_VERBOSE_TAG_DIAG_LOG_ENABLE enabled")
+    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE UWB_VERBOSE_TAG_DIAG_LOG_ENABLE=1)
+endif()
 
 if(DEFINED PRODUCT_LOW_POWER_MODE)
     message(STATUS "PRODUCT_LOW_POWER_MODE defined: ${PRODUCT_LOW_POWER_MODE}")
