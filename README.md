@@ -1,5 +1,18 @@
 # STM32 DW3000 IOC-Shell (현재 상태: 통합 완료)
 
+## Documentation Entry
+
+Start here for the 03 Customer delivery repo:
+
+- Quick start: `docs/PRODUCT_QUICK_START.md`.
+- Provisioning and flashing: `docs/PRODUCT_PROVISIONING_GUIDE.md`.
+- CAN interface: `docs/PRODUCT_CAN_INTERFACE.md` and `docs/contracts/UWB_CAN_PACKET_CONTRACT.md`.
+- Operator commands: `docs/OPERATOR_QUICK_COMMANDS.md` and `docs/COMMAND_INDEX.md`.
+- v1.0.0 release: https://github.com/TheRobotics-SW/botbox2-uwb-stm32/releases/tag/v1.0.0
+- Delivery package guide: `delivery/docs/RUNTIME_CONFIG_GUIDE.md`.
+
+This repo is the clean customer delivery repository. Do not add workspace handoff files, `docs/antigravity/*`, `docs/task.md`, or internal Product/EVB evidence here.
+
 ## 1. 개요 (Overview)
 본 저장소는 STM32G474RE + DW3000 플랫폼을 위한 통합 UWB 레인징 펌웨어를 포함하고 있습니다. 깨끗한 CubeMX 생성 "IOC Shell"을 기반으로 구축되었으며, 참조 저장소의 UWB 애플리케이션 로직을 성공적으로 이식하여 고안정성 레인징을 검증 완료했습니다.
 
