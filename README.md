@@ -13,6 +13,13 @@ Start here for the 03 Customer delivery repo:
 
 This repo is the clean customer delivery repository. Do not add workspace handoff files, `docs/antigravity/*`, `docs/task.md`, or internal Product/EVB evidence here.
 
+## Current Customer Release Status
+
+- Current Customer release: `v1.0.0`
+- This repo is a clean customer delivery export from the Product repo.
+- Do not add workspace handoff files, `docs/antigravity/*`, `docs/task.md`, or internal Product/EVB evidence here.
+- For flashing/provisioning, start with `docs/PRODUCT_QUICK_START.md` and `docs/PRODUCT_PROVISIONING_GUIDE.md`.
+
 ## 1. 개요 (Overview)
 본 저장소는 STM32G474RE + DW3000 플랫폼을 위한 통합 UWB 레인징 펌웨어를 포함하고 있습니다. 깨끗한 CubeMX 생성 "IOC Shell"을 기반으로 구축되었으며, 참조 저장소의 UWB 애플리케이션 로직을 성공적으로 이식하여 고안정성 레인징을 검증 완료했습니다.
 
@@ -23,7 +30,7 @@ This repo is the clean customer delivery repository. Do not add workspace handof
 - **프로비저닝 (Provisioning):** `0x0807F800` 위치의 `cfg.bin`을 통한 설정 기반 역할 할당 (TAG/ANCHOR).
 
 ## 3. 프로젝트 구조 및 거버넌스 (Project Structure & Governance)
-본 저장소는 **실제 제품 UWB 프로젝트**입니다. 참조용 업스트림(EVB) 프로젝트와의 협업을 통해 기능 승격 및 계약 정합성을 유지하며, 보드 통합 및 제품 수용을 담당합니다.
+본 저장소는 **인도용(clean customer delivery) UWB 프로젝트**입니다. Product 저장소로부터 검증 완료된 릴리스 코드가 깨끗하게 내보내기(export)되어 최종 사용자 및 고객 납품을 위한 상태를 유지합니다.
 
 ### 독본 순서 (Recommended Reading Flow)
 1. [PRODUCT_OVERVIEW.md](docs/PRODUCT_OVERVIEW.md) (프로젝트 개요)
@@ -58,5 +65,5 @@ This repo is the clean customer delivery repository. Do not add workspace handof
 2. **cfg.bin:** 런타임에 보드의 역할(TAG/ANCHOR), ID 및 레인징 파라미터를 결정하는 소형(40바이트) 설정 파일.
 
 ---
-*최종 업데이트: 2026-04-29*
+*최종 업데이트: 2026-06-29*
 *
