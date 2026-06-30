@@ -2,23 +2,39 @@
 
 ## Documentation Entry
 
-Start here for the 03 Customer delivery repo:
+Start here for the 02 Product runtime/release repo:
 
-- Quick start: `docs/PRODUCT_QUICK_START.md`.
-- Provisioning and flashing: `docs/PRODUCT_PROVISIONING_GUIDE.md`.
-- CAN interface: `docs/PRODUCT_CAN_INTERFACE.md` and `docs/contracts/UWB_CAN_PACKET_CONTRACT.md`.
-- Operator commands: `docs/OPERATOR_QUICK_COMMANDS.md` and `docs/COMMAND_INDEX.md`.
-- v1.0.0 release: https://github.com/TheRobotics-SW/botbox2-uwb-stm32/releases/tag/v1.0.0
-- Delivery package guide: `delivery/docs/RUNTIME_CONFIG_GUIDE.md`.
+- New session context: upload `C:\Users\ryan\dev\embedded\UWB_STM32\UWB_PROJECT_SESSION_HANDOFF_v1.0.0.md`.
+- Command index: `docs/COMMAND_INDEX.md`.
+- Operator workflow: `docs/OPERATOR_QUICK_COMMANDS.md`.
+- Product overview and setup: `docs/PRODUCT_OVERVIEW.md`, then `docs/PRODUCT_QUICK_START.md`.
+- CAN contract: `docs/PRODUCT_CAN_INTERFACE.md` and `docs/contracts/UWB_CAN_PACKET_CONTRACT.md`.
 
-This repo is the clean customer delivery repository. Do not add workspace handoff files, `docs/antigravity/*`, `docs/task.md`, or internal Product/EVB evidence here.
+Product release gate:
 
-## Current Customer Release Status
+```powershell
+powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 gate -Repo product
+```
 
-- Current Customer release: `v1.0.0`
-- This repo is a clean customer delivery export from the Product repo.
-- Do not add workspace handoff files, `docs/antigravity/*`, `docs/task.md`, or internal Product/EVB evidence here.
-- For flashing/provisioning, start with `docs/PRODUCT_QUICK_START.md` and `docs/PRODUCT_PROVISIONING_GUIDE.md`.
+This repo owns Product runtime, Product board integration, release acceptance, and Product-to-Customer export source. Product acceptance evidence stays here, not in Customer.
+
+## Current Release Status
+
+- Current Product baseline: `v1.0.0-product-accepted`
+- This repo is the Product runtime, board integration, release acceptance, and Product-to-Customer export source.
+- Product acceptance evidence stays in this repo, not in Customer.
+- Customer release source: clean export from this Product repo.
+
+### Release Firmware Assets
+
+The release package includes the following firmware assets depending on operating profile:
+
+- `firmware.bin` (Default firmware)
+- `firmware_rxdiag.bin`
+- `firmware_product_ch5.bin`
+- `firmware_product_ch9.bin`
+
+Runtime role, PAN ID, short address, and anchor topology are still controlled by `cfg.bin` at the reserved configuration flash area.
 
 ## 1. 개요 (Overview)
 본 저장소는 STM32G474RE + DW3000 플랫폼을 위한 통합 UWB 레인징 펌웨어를 포함하고 있습니다. 깨끗한 CubeMX 생성 "IOC Shell"을 기반으로 구축되었으며, 참조 저장소의 UWB 애플리케이션 로직을 성공적으로 이식하여 고안정성 레인징을 검증 완료했습니다.
@@ -30,7 +46,7 @@ This repo is the clean customer delivery repository. Do not add workspace handof
 - **프로비저닝 (Provisioning):** `0x0807F800` 위치의 `cfg.bin`을 통한 설정 기반 역할 할당 (TAG/ANCHOR).
 
 ## 3. 프로젝트 구조 및 거버넌스 (Project Structure & Governance)
-본 저장소는 **인도용(clean customer delivery) UWB 프로젝트**입니다. Product 저장소로부터 검증 완료된 릴리스 코드가 깨끗하게 내보내기(export)되어 최종 사용자 및 고객 납품을 위한 상태를 유지합니다.
+본 저장소는 **실제 제품 UWB 프로젝트**입니다. 참조용 업스트림(EVB) 프로젝트와의 협업을 통해 기능 승격 및 계약 정합성을 유지하며, 보드 통합 및 제품 수용을 담당합니다.
 
 ### 독본 순서 (Recommended Reading Flow)
 1. [PRODUCT_OVERVIEW.md](docs/PRODUCT_OVERVIEW.md) (프로젝트 개요)
@@ -60,10 +76,34 @@ This repo is the clean customer delivery repository. Do not add workspace handof
 - **LEDs:** 시스템 상태 표시기 (`PA8`=LED_RIGHT).
 
 ## 7. 배포 모델 (Deployment Model)
-본 프로젝트는 **고정 펌웨어(Golden Firmware)** 모델을 따릅니다:
-1. **firmware.bin:** 모든 보드에 배포되는 단일 공통 바이너리.
+본 프로젝트는 **고정 펌웨어(Golden Firmware)** 모델 및 운영 프로필별 release assets 구조를 따릅니다:
+1. **기본 공통 펌웨어 및 변형 바이너리:** 기본 공통 `firmware.bin` 외에도, 특정 운영 환경용 변형 바이너리(예: `firmware_rxdiag.bin`, `firmware_product_ch5.bin`, `firmware_product_ch9.bin`)들이 제공될 수 있습니다.
 2. **cfg.bin:** 런타임에 보드의 역할(TAG/ANCHOR), ID 및 레인징 파라미터를 결정하는 소형(40바이트) 설정 파일.
 
 ---
 *최종 업데이트: 2026-06-29*
 *
+
+### CH9 5Hz Multipath-Tolerant Conservative Profile
+
+- CH9 TAG ranging rate changed to 5Hz for higher temporal resolution.
+- CH9 uses 55ms anchor slots and 6.5ms Slot 2/3 guards; including the 3ms minimum gap, the 200ms period retains 19ms margin.
+- CH9 anchor-side filtering focuses on output slew-rate stability rather than aggressive multipath rejection.
+- Multipath/NLOS-like measurements remain candidates when they form a plausible trend.
+- CH5 timing and filter profiles remain unchanged.
+- Define `UWB_CH9_FILTER_DEBUG=1` to print the active CH9 filter profile once at initialization.
+
+### CH9 Extreme-Only Multipath Filtering Experiment
+
+- CH9 keeps multipath/NLOS-like measurements as candidates when the distance and RX diagnostics are physically valid.
+- Timeout, RX/frame errors, malformed diagnostics, and invalid, zero, negative, NaN/Inf, or over-range distances remain hard rejects.
+- Final output stability is controlled primarily by the 360mm/sample LPF slew limit rather than aggressive quality or Kalman rejection.
+- CH9 soft-accepted measurements use a minimum Kalman `los_conf` of 0.45; CH5 behavior remains unchanged.
+- Define `UWB_CH9_FILTER_DEBUG=1` to enable rate-limited `[UWB][CH9][QUAL]` policy logs.
+
+### CH9 Diagnostic Glitch Hold
+
+- CH9 treats one-off `diag_insane` frames as diagnostic glitches instead of immediate communication loss.
+- The first two consecutive glitches resend the last valid distance for up to 600ms without updating LPF/KF state.
+- Three consecutive or persistent diagnostic failures fall back to the existing communication-lost `-1` behavior.
+- A successful distance update clears the per-anchor glitch state; CH5 behavior remains unchanged.

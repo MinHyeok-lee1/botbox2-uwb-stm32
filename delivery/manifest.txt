@@ -1,7 +1,6 @@
-﻿# ?섎룞 delivery package manifest (SHA256)
-# ???뚯씪? ?댁쁺??寃?좎슜 ?섎룞 package inventory?낅땲??
-# build system???먮룞 ?앹꽦?섏? ?딆뒿?덈떎.
-# 寃쎈줈??delivery/ 湲곗? ?곷? 寃쎈줈?낅땲??
+# Product delivery package manifest (SHA256)
+# Paths are relative to delivery/.
+# Firmware aliases are intentionally excluded; use explicit CH5/CH9 variants.
 
 8e66fca5861c3b3dadae3fdda4e77c063d6ef16c406b131dab512c53a78616da *configs/anc_a2001_ds_p2001.bin
 41cdb4470fc085d4dfa9231e22d2e74cc585b8f4400dadc924a9f5e9679560d5 *configs/anc_a2001_ss_p2001.bin
@@ -14,10 +13,9 @@ c6f4308c6ccb352b4d12d41dd24b96869a3ffc2be159e393e7bb48ae300d10fb *configs/tag_a1
 a39a16a773f5e7f00c810a4194a076ddfdf321d3db97ad72dadc5ff5fdded279 *configs/tag_a1001_ss_1a_p2001.bin
 05f7a4683a3c2e7c73eeca845c9a7acf8ca1416e11d58cdb5edc26402739d66a *configs/tag_a1001_ss_3a_p2001.bin
 b17649fbd781be3705bf1c849b75e5f8c8f30e1841d61d02aab4372240c70638 *docs/RUNTIME_CONFIG_GUIDE.md
-5F9405DBC094126526AB00E06F36318706448751E38F0C5662CCB206707E94C5 *firmware.bin
-C17BA07BE8A3BD4CA362996EA92897D2476FE7F96C3AC452F8F19B4FE58493A9 *firmware.hex
-D18A4DF02AD991A2037B5D1F2E52C001CCC3A04A78C1CE4E4999CE3CF3DAE347 *firmware_rxdiag.bin
-aafde45b2bb86d89c0fdb8923f0d3b8372437c42aaedcf6256a9f51a486ce68d *README.md
-568313f8378d22b93fd01b8c92bc5f550a2671bab0eae87dedfcdc4cea0dcd30 *release_notes.txt
+64927DBA2B72A68E4F0BDA76DB0AB4CE46D791EF3B913F66A9162159D2B82714 *firmware_product_ch5.bin
+1BB903D0675F2E72D9F097670E32F3EB6142E6F780381B208949166D479FDB96 *firmware_product_ch9.bin
+D9B998F26BDB3BD8B6E7370D180D9311BFCAD3E30F594F35F1607E0577DF9A0C *firmware_rxdiag_ch5.bin
+F2EAFF6F2A5855A72F0E37A1FA6ED52F3EA0E365777843007DEC65C0E42F71C7 *firmware_rxdiag_ch9.bin
 a52371d4f32c0b63e4e9e0d595e3ea14c040d384ae7a4058cf3d5d5090ca80ad *tools/provision.ps1
 2b715d9cb484fb846b10b09a9e58e72fd7a67a3f37215bb8fe1f53e5389dc636 *tools/provision.sh

@@ -10,6 +10,14 @@
 #define TAG_VERBOSE_LOGS UWB_VERBOSE_TAG_DIAG_LOG_ENABLE
 #endif
 
+#ifndef UWB_KF_DEBUG_LOGS
+#define UWB_KF_DEBUG_LOGS 0
+#endif
+
+#ifndef UWB_CH9_FILTER_DEBUG
+#define UWB_CH9_FILTER_DEBUG 0
+#endif
+
 typedef struct {
     uint32_t n;
     uint64_t sum_raw;
@@ -147,6 +155,29 @@ void uwb_distance_lpf_reset(uwb_distance_lpf_t *f)
     }
     memset(f, 0, sizeof(*f));
     f->base_alpha_permille = UWB_DISTANCE_LPF_BASE_ALPHA_PERMILLE;
+
+#if defined(UWB_RF_CHANNEL) && (UWB_RF_CHANNEL == 9) && UWB_CH9_FILTER_DEBUG
+    static uint8_t profile_logged = 0U;
+    if (profile_logged == 0U) {
+        profile_logged = 1U;
+        printf("[UWB][FILTER][CH9][5HZ_MP_TOL] rate=5Hz slot=55 guard=6500 max_step=%ld spike=%ld jump=%ld stable=%ld resync=%ld alpha_base=%ld alpha_min=%ld alpha_max=%ld kf_q_dist=%ld kf_q_vel=%ld kf_r=%ld nlos_scale=%ld gate=%ld kf_damp_x100=%ld kf_max_vel=%ld\r\n",
+               (long)UWB_ANC_LPF_MAX_STEP_MM,
+               (long)UWB_ANC_LPF_SPIKE_THRESHOLD_MM,
+               (long)UWB_ANC_LPF_JUMP_THRESHOLD_MM,
+               (long)UWB_ANC_LPF_STABLE_SPREAD_MM,
+               (long)UWB_ANC_LPF_RESYNC_DELTA_MM,
+               (long)UWB_DISTANCE_LPF_BASE_ALPHA_PERMILLE,
+               (long)UWB_DISTANCE_LPF_MIN_ALPHA_PERMILLE,
+               (long)UWB_DISTANCE_LPF_MAX_ALPHA_PERMILLE,
+               (long)UWB_KF_Q_DIST_MM2,
+               (long)UWB_KF_Q_VEL_MM2S2,
+               (long)UWB_KF_R_BASE_MM2,
+               (long)UWB_KF_R_NLOS_SCALE,
+               (long)UWB_KF_GATE_THRESHOLD,
+               (long)(UWB_KF_VEL_DAMPING * 100.0f),
+               (long)UWB_KF_MAX_VEL_MM_S);
+    }
+#endif
 }
 
 static int32_t uwb_abs_i32(int32_t x)
@@ -160,6 +191,9 @@ static bool uwb_distance_lpf_is_spike(const uwb_distance_lpf_t *f)
         return false;
     }
 
+    int32_t eff_spike_thresh = (f->spike_threshold_mm > 0L)
+        ? f->spike_threshold_mm : UWB_DISTANCE_LPF_SPIKE_THRESHOLD_MM;
+
     uint8_t i1 = (uint8_t)((f->idx + UWB_DISTANCE_LPF_RECENT_SIZE - 1U) % UWB_DISTANCE_LPF_RECENT_SIZE);
     uint8_t i2 = (uint8_t)((f->idx + UWB_DISTANCE_LPF_RECENT_SIZE - 2U) % UWB_DISTANCE_LPF_RECENT_SIZE);
     uint8_t i3 = (uint8_t)((f->idx + UWB_DISTANCE_LPF_RECENT_SIZE - 3U) % UWB_DISTANCE_LPF_RECENT_SIZE);
@@ -167,8 +201,8 @@ static bool uwb_distance_lpf_is_spike(const uwb_distance_lpf_t *f)
     int32_t d12 = f->recent[i1] - f->recent[i2];
     int32_t d23 = f->recent[i2] - f->recent[i3];
 
-    return (uwb_abs_i32(d12) > UWB_DISTANCE_LPF_SPIKE_THRESHOLD_MM) &&
-           (uwb_abs_i32(d23) > UWB_DISTANCE_LPF_SPIKE_THRESHOLD_MM) &&
+    return (uwb_abs_i32(d12) > eff_spike_thresh) &&
+           (uwb_abs_i32(d23) > eff_spike_thresh) &&
            (((int64_t)d12 * (int64_t)d23) < 0);
 }
 
@@ -194,6 +228,8 @@ static bool uwb_distance_lpf_recent_stable_avg(const uwb_distance_lpf_t *f,
     int32_t min_v = 2147483647L;
     int32_t max_v = -2147483647L;
     int64_t sum = 0;
+    int32_t eff_stable_spread = (f->stable_spread_mm > 0L)
+        ? f->stable_spread_mm : UWB_DISTANCE_LPF_STABLE_SPREAD_MM;
 
     for (uint8_t i = 0U; i < UWB_DISTANCE_LPF_STABLE_COUNT; i++) {
         uint8_t idx = (uint8_t)((f->idx + UWB_DISTANCE_LPF_RECENT_SIZE - 1U - i) %
@@ -209,7 +245,7 @@ static bool uwb_distance_lpf_recent_stable_avg(const uwb_distance_lpf_t *f,
         sum += (int64_t)v;
     }
 
-    if ((max_v - min_v) > UWB_DISTANCE_LPF_STABLE_SPREAD_MM) {
+    if ((max_v - min_v) > eff_stable_spread) {
         return false;
     }
 
@@ -299,12 +335,18 @@ int32_t uwb_distance_lpf_update_mm(uwb_distance_lpf_t *f, int32_t measurement_mm
 
     int32_t delta_mm = measurement_mm - f->estimate_mm;
     int32_t abs_delta_mm = uwb_abs_i32(delta_mm);
+    int32_t eff_max_step = (f->max_step_mm > 0L)
+        ? f->max_step_mm : UWB_DISTANCE_LPF_MAX_STEP_MM;
+    int32_t eff_jump_thresh = (f->jump_threshold_mm > 0L)
+        ? f->jump_threshold_mm : UWB_DISTANCE_LPF_JUMP_THRESHOLD_MM;
+    int32_t eff_resync_delta = (f->resync_delta_mm > 0L)
+        ? f->resync_delta_mm : UWB_DISTANCE_LPF_RESYNC_DELTA_MM;
 
     uwb_distance_lpf_push_recent(f, measurement_mm);
 
     int32_t stable_avg_mm = 0L;
     if (uwb_distance_lpf_recent_stable_avg(f, &stable_avg_mm)) {
-        if (uwb_abs_i32(f->estimate_mm - stable_avg_mm) > UWB_DISTANCE_LPF_RESYNC_DELTA_MM) {
+        if (uwb_abs_i32(f->estimate_mm - stable_avg_mm) > eff_resync_delta) {
             f->estimate_mm = (int32_t)(((int64_t)f->estimate_mm * 3L +
                                         (int64_t)stable_avg_mm * 7L) / 10L);
             f->last_delta_mm = 0L;
@@ -316,13 +358,13 @@ int32_t uwb_distance_lpf_update_mm(uwb_distance_lpf_t *f, int32_t measurement_mm
         return f->estimate_mm;
     }
 
-    if (abs_delta_mm > UWB_DISTANCE_LPF_JUMP_THRESHOLD_MM) {
+    if (abs_delta_mm > eff_jump_thresh) {
         int32_t step_mm = delta_mm;
 
-        if (step_mm > UWB_DISTANCE_LPF_MAX_STEP_MM) {
-            step_mm = UWB_DISTANCE_LPF_MAX_STEP_MM;
-        } else if (step_mm < -UWB_DISTANCE_LPF_MAX_STEP_MM) {
-            step_mm = -UWB_DISTANCE_LPF_MAX_STEP_MM;
+        if (step_mm > eff_max_step) {
+            step_mm = eff_max_step;
+        } else if (step_mm < -eff_max_step) {
+            step_mm = -eff_max_step;
         }
 
         f->estimate_mm += step_mm;
@@ -349,6 +391,140 @@ int32_t uwb_distance_lpf_update_mm(uwb_distance_lpf_t *f, int32_t measurement_mm
 }
 
 // 내부용: 슬라이딩 윈도우에 샘플 추가
+void uwb_kf1d_reset(uwb_kf1d_t *kf)
+{
+    if (kf == NULL) return;
+    kf->x[0] = 0.0f;
+    kf->x[1] = 0.0f;
+    kf->P[0][0] = 10000.0f;  /* large initial dist uncertainty */
+    kf->P[0][1] = 0.0f;
+    kf->P[1][0] = 0.0f;
+    kf->P[1][1] = 10000.0f;  /* large initial vel uncertainty */
+    kf->initialized = 0U;
+}
+
+static float uwb_kf_clamp_velocity(float vel_mm_s)
+{
+    if (vel_mm_s > UWB_KF_MAX_VEL_MM_S) {
+        return UWB_KF_MAX_VEL_MM_S;
+    }
+    if (vel_mm_s < -UWB_KF_MAX_VEL_MM_S) {
+        return -UWB_KF_MAX_VEL_MM_S;
+    }
+    return vel_mm_s;
+}
+
+float uwb_kf1d_update(uwb_kf1d_t *kf,
+                      float measurement_mm,
+                      float dt_s,
+                      float los_conf)
+{
+    if (kf == NULL) {
+        return isfinite(measurement_mm) ? measurement_mm : 0.0f;
+    }
+
+    if (!isfinite(measurement_mm)) {
+        return (kf->initialized != 0U) ? kf->x[0] : 0.0f;
+    }
+
+    if (!isfinite(dt_s)) {
+        dt_s = UWB_KF_DT_MIN_S;
+    }
+
+    if (!isfinite(los_conf)) {
+        los_conf = 0.0f;
+    }
+    if (los_conf < 0.0f) los_conf = 0.0f;
+    if (los_conf > 1.0f) los_conf = 1.0f;
+
+    if (measurement_mm < 0.0f) {
+        measurement_mm = 0.0f;
+    }
+
+    /* Clamp dt */
+    if (dt_s < UWB_KF_DT_MIN_S) dt_s = UWB_KF_DT_MIN_S;
+    if (dt_s > UWB_KF_DT_MAX_S) dt_s = UWB_KF_DT_MAX_S;
+
+    /* Cold start: initialize with first measurement */
+    if (kf->initialized == 0U) {
+        kf->x[0] = measurement_mm;
+        kf->x[1] = 0.0f;
+        kf->initialized = 1U;
+        return measurement_mm;
+    }
+
+    /* --- PREDICT --- */
+    /* x_pred = F * x  where F = [[1, dt],[0, 1]] */
+    float x1_pred = uwb_kf_clamp_velocity(kf->x[1] * UWB_KF_VEL_DAMPING);
+    float x0_pred = kf->x[0] + x1_pred * dt_s;
+    if (x0_pred < 0.0f) {
+        x0_pred = 0.0f;
+    }
+
+    /* P_pred = F * P * F^T + Q */
+    float dt2 = dt_s * dt_s;
+    float P00_pred = kf->P[0][0]
+                   + dt_s * (kf->P[1][0] + kf->P[0][1])
+                   + dt2 * kf->P[1][1]
+                   + UWB_KF_Q_DIST_MM2;
+    float P01_pred = kf->P[0][1] + dt_s * kf->P[1][1];
+    float P10_pred = kf->P[1][0] + dt_s * kf->P[1][1];
+    float P11_pred = kf->P[1][1] + UWB_KF_Q_VEL_MM2S2;
+
+    /* --- NLOS-scaled measurement noise --- */
+    /* los_conf=1 -> R=R_base; los_conf=0 -> R=R_base*(1+NLOS_SCALE) */
+    float nlos_factor = 1.0f + UWB_KF_R_NLOS_SCALE * (1.0f - los_conf);
+    float R = UWB_KF_R_BASE_MM2 * nlos_factor;
+
+    /* --- MAHALANOBIS GATE --- */
+    float innovation = measurement_mm - x0_pred;
+    float S = P00_pred + R;            /* innovation covariance */
+    float gate = (innovation * innovation) / S;
+
+    if (gate > UWB_KF_GATE_THRESHOLD) {
+        /* Outlier: damp velocity and move slightly toward plausible measurement. */
+        kf->x[0] = (0.85f * kf->x[0]) + (0.15f * measurement_mm);
+        if (kf->x[0] < 0.0f) {
+            kf->x[0] = 0.0f;
+        }
+        kf->x[1] = uwb_kf_clamp_velocity(x1_pred * UWB_KF_GATE_REJECT_VEL_DAMPING);
+        kf->P[0][0] = P00_pred;
+        kf->P[0][1] = P01_pred;
+        kf->P[1][0] = P10_pred;
+        kf->P[1][1] = P11_pred;
+#if UWB_KF_DEBUG_LOGS
+        printf("[UWB][KF][GATE] meas=%ld pred=%ld gate=%ld\r\n",
+               (long)measurement_mm,
+               (long)x0_pred,
+               (long)gate);
+#endif
+        return kf->x[0];
+    }
+
+    /* --- UPDATE --- */
+    /* Kalman gain: K = P_pred * H^T / S  where H = [1, 0] */
+    float K0 = P00_pred / S;
+    float K1 = P10_pred / S;
+
+    kf->x[0] = x0_pred + K0 * innovation;
+    kf->x[1] = x1_pred + K1 * innovation;
+    if (fabsf(innovation) < UWB_KF_STOP_INNOV_MM) {
+        kf->x[1] *= UWB_KF_STOP_VEL_DAMPING;
+    }
+    kf->x[1] = uwb_kf_clamp_velocity(kf->x[1]);
+    if (kf->x[0] < 0.0f) {
+        kf->x[0] = 0.0f;
+    }
+
+    /* P = (I - K*H) * P_pred */
+    kf->P[0][0] = (1.0f - K0) * P00_pred;
+    kf->P[0][1] = (1.0f - K0) * P01_pred;
+    kf->P[1][0] = P10_pred - K1 * P00_pred;
+    kf->P[1][1] = P11_pred - K1 * P01_pred;
+
+    return kf->x[0];
+}
+
 static void twr_dist_filter_push(twr_dist_filter_t *f, float d_mm)
 {
     f->buf[f->idx] = d_mm;

@@ -1,4 +1,4 @@
-/* USER CODE BEGIN Header */
+﻿/* USER CODE BEGIN Header */
 /**
   ******************************************************************************
   * @file           : main.c
@@ -55,28 +55,53 @@
 #include <stdlib.h>
 #include <math.h>
 
+// main.c
 // ===== 튜닝 파라미터 =====
-#define POLL_TX_TO_RESP_RX_DLY_UUS 900
-#define RESP_RX_TIMEOUT_UUS         1500  
-#define POLL_RX_TO_RESP_TX_DLY_UUS   1400   
 
 // ===== DS-TWR Additional Timing =====
+#define POLL_TX_TO_RESP_RX_DLY_UUS 900
+#define POLL_RX_TO_RESP_TX_DLY_UUS   1400   
 #define RESP_RX_TO_FINAL_TX_DLY_UUS  1500   // TAG: delay from RESP RX to FINAL TX (reduced from 3000)
-#define FINAL_RX_TIMEOUT_UUS         8000   // ANCHOR: timeout waiting for FINAL (bumped from 5000 for mixed-UWB window margin)
 
+#if (UWB_RF_CHANNEL == 9)
+#define FINAL_RX_TIMEOUT_UUS   12000  // 10000 -> 12000
+#define RESP_RX_TIMEOUT_UUS     2500  // 2000 -> 2500
+#else
+#define FINAL_RX_TIMEOUT_UUS         8000   // ANCHOR: timeout waiting for FINAL (bumped from 5000 for mixed-UWB window margin)
+#define RESP_RX_TIMEOUT_UUS         1500  
+#endif
+
+#if (UWB_RF_CHANNEL == 9)
+#define TX_ANT_DLY 16385  /* CH9 calibrated: -33mm bias correction at 700mm reference. */
+#define RX_ANT_DLY 16385
+#else
 #define TX_ANT_DLY 16416
 #define RX_ANT_DLY 16416
+#endif
 
 // ===== Operations Tuning =====
 #define ANCHOR_LINK_TIMEOUT_MS  5000U  // Initial threshold for "Lost" state (ms)
 #define ANCHOR_COMM_LOST_MARK_MS 1000U  // Send -1 after this much silence, then keepalive at 1 Hz
 #define ANCHOR_LOST_LOG_MS      5000U  // Interval for "Still Lost" reminders (ms)
 #define ANCHOR_LP_TIMEOUT_MS   60000U  // Time before entering Low Power Listen (ms)
+#ifndef UWB_CH9_FILTER_DEBUG
+#define UWB_CH9_FILTER_DEBUG 0
+#endif
+#if (UWB_RF_CHANNEL == 9)
+#define UWB_CH9_DIAG_INSANE_HOLD_MS      600U
+#define UWB_CH9_DIAG_INSANE_MAX_COUNT      3U
+#define TAG_RANGING_RATE_HZ    5U    // CH9 multipath-tolerant test profile
+#define TAG_ANCHOR_SLOT_MS    55U    // 3 slots + guards + min gap leave 19ms at 5Hz
+#define TAG_MIN_GAP_MS         3U    // Safety floor between scans (ms)
+#define TAG_SLOT2_GUARD_US   6500U   // CH9 guard delay before Slot 2 poll
+#define TAG_SLOT3_GUARD_US   6500U   // CH9 guard delay before Slot 3 poll
+#else
 #define TAG_RANGING_RATE_HZ    4U    // Target Frequency (Full Scans per second)
 #define TAG_ANCHOR_SLOT_MS    65U    // Per-anchor baseline budget (includes retries)
 #define TAG_MIN_GAP_MS         5U    // Safety floor between scans (ms)
 #define TAG_SLOT2_GUARD_US   7500U   // [TEST] Decisive 7.5ms guard delay before Slot 2 poll
 #define TAG_SLOT3_GUARD_US   7500U   // [TEST] Decisive 7.5ms guard delay before Slot 3 poll
+#endif
 #define ANCHOR_LP_WAKE_INTERVAL_MS  2500U // Accepted slow-listen recovery period (ms)
 #define ANCHOR_LP_LISTEN_WINDOW_MS   250U // Accepted slow-listen active RX window (ms)
 
@@ -131,11 +156,19 @@ typedef enum {
 #define TWR_FP_MAX_GAP_Q6 200
 #define FP_GAP_MAX_SAMP 12U
 
+#if (UWB_RF_CHANNEL == 9)
+#define TWR_QUAL_MIN_RSSI   3U
+#define TWR_QUAL_WARN_RSSI  TWR_QUAL_MIN_RSSI  // RSSI warning threshold (does NOT gate ok)
+
+#define TWR_QUAL_MIN_SNR    5U
+#define TWR_QUAL_MIN_MP     35U
+#else
 #define TWR_QUAL_MIN_RSSI   5U
 #define TWR_QUAL_WARN_RSSI  TWR_QUAL_MIN_RSSI  // RSSI warning threshold (does NOT gate ok)
 
 #define TWR_QUAL_MIN_SNR    7U
 #define TWR_QUAL_MIN_MP     50U
+#endif
 
 // ===== 기타 파라미터 =====
 #define RESP_TS_ADJ_UNITS  0   // 프레임에 넣는 resp_tx_ts 보정치(유닛)
@@ -400,6 +433,111 @@ void Error_Handler(void);
 #endif
 static twr_dist_filter_t g_twr_dist_filter_by_anchor[NUM_OF_ANCHORS];
 
+/* Anchor-side unified NLOS-fused LPF state (CH5 and CH9) */
+static uwb_distance_lpf_t g_anc_lpf[NUM_OF_ANCHORS];
+
+/* Anchor-side per-anchor 1D Kalman filter state */
+static uwb_kf1d_t g_anc_kf[NUM_OF_ANCHORS];
+
+/* Anchor-side raw-vs-LPF divergence tracking */
+static uint8_t g_anc_diverge_count[NUM_OF_ANCHORS];
+static int8_t  g_anc_diverge_sign[NUM_OF_ANCHORS];
+
+/* Per-anchor last measurement tick for Kalman dt calculation */
+static uint32_t g_anc_kf_last_tick_ms[NUM_OF_ANCHORS];
+
+/* Per-anchor last valid Kalman distance for invalid_distance hold */
+static long g_anc_last_valid_dist_mm[NUM_OF_ANCHORS];
+static uint32_t g_anc_last_valid_tick_ms[NUM_OF_ANCHORS];
+
+#if (UWB_RF_CHANNEL == 9)
+/* Per-anchor diagnostic-glitch hold state. Invalid diagnostics never update
+ * LPF/KF; short bursts reuse the recent valid CAN distance instead. */
+static uint8_t g_anc_diag_insane_count[NUM_OF_ANCHORS];
+static uint32_t g_anc_diag_insane_first_tick_ms[NUM_OF_ANCHORS];
+#endif
+
+/* How long to hold last valid distance before sending -1 (ms) */
+#ifndef UWB_ANC_HOLD_LAST_DIST_MS
+#define UWB_ANC_HOLD_LAST_DIST_MS  0U
+#endif
+
+#define UWB_ANC_DIVERGE_RESET_MM      1200L
+#define UWB_ANC_DIVERGE_COUNT_LIMIT   3U
+
+#if (UWB_RF_CHANNEL == 9) && UWB_CH9_FILTER_DEBUG
+static void uwb_ch9_quality_debug_log(long raw_mm,
+                                      bool original_quality_ok,
+                                      const char *reason,
+                                      const char *policy,
+                                      const char *weight,
+                                      long los_x100)
+{
+    static uint32_t last_log_ms = 0U;
+    static uint8_t log_initialized = 0U;
+    uint32_t now_ms = HAL_GetTick();
+
+    if ((log_initialized != 0U) &&
+        ((uint32_t)(now_ms - last_log_ms) < 1000U)) {
+        return;
+    }
+
+    log_initialized = 1U;
+    last_log_ms = now_ms;
+    printf("[UWB][CH9][QUAL] raw=%ld q_ok=%u reason=%s policy=%s weight=%s los_x100=%ld\r\n",
+           raw_mm,
+           (unsigned int)(original_quality_ok ? 1U : 0U),
+           ((reason != NULL) && (reason[0] != '\0')) ? reason : "ok",
+           (policy != NULL) ? policy : "normal",
+           (weight != NULL) ? weight : "n/a",
+           los_x100);
+}
+
+static void uwb_ch9_diag_insane_debug_log(uint16_t aid,
+                                          const dwt_rxdiag_t *diag)
+{
+    static uint32_t last_log_ms = 0U;
+    static uint8_t log_initialized = 0U;
+    uint32_t now_ms = HAL_GetTick();
+
+    if (diag == NULL) {
+        return;
+    }
+    if ((log_initialized != 0U) &&
+        ((uint32_t)(now_ms - last_log_ms) < 1000U)) {
+        return;
+    }
+
+    const char *fail = "unknown";
+    uint32_t cir_pwr = diag->ipatovPower & 0x1FFFFUL;
+    uint32_t noise_proxy = diag->ipatovF1 & 0x3FFFFFUL;
+    uint32_t accum = (uint32_t)diag->ipatovAccumCount;
+
+    if (diag->ipatovFpIndex == 0U) {
+        fail = "fp_index_zero";
+    } else if (cir_pwr == 0U) {
+        fail = "cir_zero";
+    } else if (noise_proxy < TWR_DIAG_NOISE_MIN) {
+        fail = "noise_too_low";
+    } else if ((accum < TWR_DIAG_ACCUM_MIN) ||
+               (accum > TWR_DIAG_ACCUM_MAX)) {
+        fail = "rxpacc_out_of_range";
+    }
+
+    log_initialized = 1U;
+    last_log_ms = now_ms;
+    printf("[UWB][CH9][DIAG_INSANE] AID=0x%04X raw=-1 fp_idx=%lu fp1=%lu fp2=%lu fp3=%lu cir=%lu rxpacc=%lu fail=%s\r\n",
+           (unsigned int)aid,
+           (unsigned long)diag->ipatovFpIndex,
+           (unsigned long)(diag->ipatovF1 & 0x3FFFFFUL),
+           (unsigned long)(diag->ipatovF2 & 0x3FFFFFUL),
+           (unsigned long)(diag->ipatovF3 & 0x3FFFFFUL),
+           (unsigned long)cir_pwr,
+           (unsigned long)accum,
+           fail);
+}
+#endif
+
 // anchor_id -> per-anchor filter 매핑 (구현은 g_sys_cfg 선언 이후에 정의)
 static int8_t twr_anchor_slot_from_id(uint16_t anchor_id);
 twr_dist_filter_t* twr_get_filter_by_anchor(uint16_t anchor_id);
@@ -415,6 +553,14 @@ void twr_dist_filter_init(void)
 {
     for (uint8_t i = 0U; i < NUM_OF_ANCHORS; i++) {
         twr_dist_filter_reset(&g_twr_dist_filter_by_anchor[i]);
+        uwb_distance_lpf_reset(&g_anc_lpf[i]);
+        uwb_kf1d_reset(&g_anc_kf[i]);
+        g_anc_diverge_count[i] = 0U;
+        g_anc_diverge_sign[i] = 0;
+#if (UWB_RF_CHANNEL == 9)
+        g_anc_diag_insane_count[i] = 0U;
+        g_anc_diag_insane_first_tick_ms[i] = 0U;
+#endif
     }
 }
 
@@ -481,6 +627,12 @@ static void product_gpio_diag_blink(int count)
 #ifndef PRODUCT_UART_SMOKE_KNOWN_GOOD
 #define PRODUCT_UART_SMOKE_KNOWN_GOOD 0
 #endif
+
+#ifndef PRODUCT_UART_CMD_ENABLE
+#define PRODUCT_UART_CMD_ENABLE 1
+#endif
+
+#define PRODUCT_UART_CMD_BUF_SIZE 64U
 
 #define PRODUCT_LP_WAKE_PIN      USER_BUTTON_Pin
 #define PRODUCT_LP_WAKE_PORT     USER_BUTTON_GPIO_Port
@@ -589,6 +741,11 @@ static void dw3000_reset(void);
 static uwb_cfg_t g_sys_cfg;
 static void product_role_leds_init(void);
 static void product_role_leds_apply(const uwb_cfg_t *cfg);
+#if PRODUCT_UART_CMD_ENABLE
+static void product_uart_cmd_start_rx(void);
+static void product_uart_cmd_poll(void);
+static uint8_t product_uart_cmd_channel(void);
+#endif
 #if PRODUCT_EXPERIMENTAL_DW3000_SLEEP
 static void product_dw3000_sleep_enter(uint32_t tick_ms, uint32_t sleep_window_ms);
 static void product_dw3000_sleep_wake_and_rearm(uint32_t tick_ms);
@@ -605,6 +762,168 @@ static void product_stop1_slow_listen_lptim_stop(void);
 /* USER CODE BEGIN 0 */
 static bool product_boot_from_standby_wake = false;
 static bool product_wuf2_detected_on_boot = false;
+
+#if PRODUCT_UART_CMD_ENABLE
+static uint8_t g_uart_cmd_rx_byte;
+static char g_uart_cmd_buf[PRODUCT_UART_CMD_BUF_SIZE];
+static char g_uart_cmd_line[PRODUCT_UART_CMD_BUF_SIZE];
+static volatile uint8_t g_uart_cmd_ready;
+static volatile uint8_t g_uart_cmd_overflow;
+static volatile uint8_t g_uart_cmd_busy;
+static uint8_t g_uart_cmd_len;
+static uint8_t g_uart_cmd_drop_line;
+
+static void product_uart_cmd_start_rx(void)
+{
+    g_uart_cmd_len = 0U;
+    g_uart_cmd_drop_line = 0U;
+    HAL_NVIC_SetPriority(LPUART1_IRQn, 5U, 0U);
+    HAL_NVIC_EnableIRQ(LPUART1_IRQn);
+    (void)HAL_UART_Receive_IT(&hlpuart1, &g_uart_cmd_rx_byte, 1U);
+}
+
+void LPUART1_IRQHandler(void)
+{
+    HAL_UART_IRQHandler(&hlpuart1);
+}
+
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+    if (huart != &hlpuart1) {
+        return;
+    }
+
+    uint8_t byte = g_uart_cmd_rx_byte;
+
+    if ((byte == (uint8_t)'\r') || (byte == (uint8_t)'\n')) {
+        if (g_uart_cmd_drop_line != 0U) {
+            g_uart_cmd_drop_line = 0U;
+            g_uart_cmd_len = 0U;
+        } else if (g_uart_cmd_len != 0U) {
+            if (g_uart_cmd_ready == 0U) {
+                memcpy(g_uart_cmd_line, g_uart_cmd_buf, g_uart_cmd_len);
+                g_uart_cmd_line[g_uart_cmd_len] = '\0';
+                g_uart_cmd_ready = 1U;
+            } else {
+                g_uart_cmd_busy = 1U;
+            }
+            g_uart_cmd_len = 0U;
+        }
+    } else if (g_uart_cmd_drop_line == 0U) {
+        if (g_uart_cmd_ready != 0U) {
+            g_uart_cmd_busy = 1U;
+            g_uart_cmd_drop_line = 1U;
+            g_uart_cmd_len = 0U;
+        } else if (g_uart_cmd_len < (PRODUCT_UART_CMD_BUF_SIZE - 1U)) {
+            g_uart_cmd_buf[g_uart_cmd_len++] = (char)byte;
+        } else {
+            g_uart_cmd_overflow = 1U;
+            g_uart_cmd_drop_line = 1U;
+            g_uart_cmd_len = 0U;
+        }
+    }
+
+    (void)HAL_UART_Receive_IT(&hlpuart1, &g_uart_cmd_rx_byte, 1U);
+}
+
+static const char *product_uart_cmd_role_string(void)
+{
+    if (g_sys_cfg.role == UWB_ROLE_TAG) {
+        return "TAG";
+    }
+    if (g_sys_cfg.role == UWB_ROLE_ANCHOR) {
+        return "ANCHOR";
+    }
+    return "UNKNOWN";
+}
+
+static void product_uart_cmd_print_help(void)
+{
+    printf("[CMD][HELP] help,status,version,role,addr,pan\r\n");
+}
+
+static void product_uart_cmd_poll(void)
+{
+    char line[PRODUCT_UART_CMD_BUF_SIZE];
+    uint8_t have_line = 0U;
+    uint8_t report_overflow;
+    uint8_t report_busy;
+    uint32_t primask;
+
+    if ((g_uart_cmd_ready == 0U) &&
+        (g_uart_cmd_overflow == 0U) &&
+        (g_uart_cmd_busy == 0U)) {
+        return;
+    }
+
+    primask = __get_PRIMASK();
+
+    __disable_irq();
+    report_overflow = g_uart_cmd_overflow;
+    report_busy = g_uart_cmd_busy;
+    g_uart_cmd_overflow = 0U;
+    g_uart_cmd_busy = 0U;
+    if (g_uart_cmd_ready != 0U) {
+        memcpy(line, g_uart_cmd_line, sizeof(line));
+        line[sizeof(line) - 1U] = '\0';
+        g_uart_cmd_ready = 0U;
+        have_line = 1U;
+    }
+    if (primask == 0U) {
+        __enable_irq();
+    }
+
+    if (report_overflow != 0U) {
+        printf("[CMD][ERR] overflow\r\n");
+    }
+    if (report_busy != 0U) {
+        printf("[CMD][ERR] busy\r\n");
+    }
+    if (have_line == 0U) {
+        return;
+    }
+
+    char *start = line;
+    while ((*start == ' ') || (*start == '\t')) {
+        start++;
+    }
+
+    char *end = start + strlen(start);
+    while ((end > start) && ((end[-1] == ' ') || (end[-1] == '\t'))) {
+        *--end = '\0';
+    }
+    if (*start == '\0') {
+        return;
+    }
+
+    for (char *p = start; *p != '\0'; p++) {
+        if ((*p >= 'A') && (*p <= 'Z')) {
+            *p = (char)(*p + ('a' - 'A'));
+        }
+    }
+
+    if (strcmp(start, "help") == 0) {
+        product_uart_cmd_print_help();
+    } else if (strcmp(start, "status") == 0) {
+        printf("[CMD][STATUS] ok tick=%lu role=%s addr=0x%04X pan=0x%04X ch=%u\r\n",
+               (unsigned long)HAL_GetTick(), product_uart_cmd_role_string(),
+               (unsigned int)g_sys_cfg.short_addr, (unsigned int)g_sys_cfg.pan_id,
+               (unsigned int)product_uart_cmd_channel());
+    } else if (strcmp(start, "version") == 0) {
+        printf("[CMD][VERSION] product-fw uart-cmd-min v1 channel=%u\r\n",
+               (unsigned int)product_uart_cmd_channel());
+    } else if (strcmp(start, "role") == 0) {
+        printf("[CMD][ROLE] %s\r\n", product_uart_cmd_role_string());
+    } else if (strcmp(start, "addr") == 0) {
+        printf("[CMD][ADDR] 0x%04X\r\n", (unsigned int)g_sys_cfg.short_addr);
+    } else if (strcmp(start, "pan") == 0) {
+        printf("[CMD][PAN] 0x%04X\r\n", (unsigned int)g_sys_cfg.pan_id);
+    } else {
+        printf("[CMD][ERR] unknown: %s\r\n", start);
+        product_uart_cmd_print_help();
+    }
+}
+#endif
 
 #if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
 static volatile bool product_manual_standby_request_latched = false;
@@ -1318,6 +1637,13 @@ static uwb_error_codes uwb_lib_init(void)
 #define UWB_RF_CHANNEL 5
 #endif
 
+#if PRODUCT_UART_CMD_ENABLE
+static uint8_t product_uart_cmd_channel(void)
+{
+    return (uint8_t)UWB_RF_CHANNEL;
+}
+#endif
+
 #if (UWB_RF_CHANNEL == 5)
 static dwt_config_t default_config = {
     .chan = 5,
@@ -1337,7 +1663,7 @@ static dwt_config_t default_config = {
 #elif (UWB_RF_CHANNEL == 9)
 static dwt_config_t default_config = {
     .chan = 9,
-    .txPreambLength = DWT_PLEN_64,
+    .txPreambLength = DWT_PLEN_128,
     .rxPAC = DWT_PAC8,
     .txCode = 11,
     .rxCode = 11,
@@ -1345,7 +1671,7 @@ static dwt_config_t default_config = {
     .dataRate = DWT_BR_6M8,
     .phrMode = DWT_PHRMODE_STD,
     .phrRate = DWT_PHRRATE_STD,
-    .sfdTO = (64 + 1 + 8 - 8),
+    .sfdTO = (128 + 1 + 8 - 8),
     .stsMode = DWT_STS_MODE_OFF,
     .stsLength = DWT_STS_LEN_64,
     .pdoaMode = DWT_PDOA_M0
@@ -1363,7 +1689,7 @@ dwt_txconfig_t txconfig_ch5 = {
 };
 
 dwt_txconfig_t txconfig_ch9 = {
-  0x34,       /* PG delay. */
+  0x28,       /* PG delay for CH9. */
   0xfefefefe, /* TX power. */
   0x0         /*PG count*/
 };
@@ -1957,6 +2283,9 @@ void oneway_benchmark_anchor_main(void)
            (unsigned)_mac.addr);
 
     while (1) {
+#if PRODUCT_UART_CMD_ENABLE
+        product_uart_cmd_poll();
+#endif
         uint32_t t_start = HAL_GetTick();
         uint8_t sn = (uint8_t)(seq & 0xFFU);
 
@@ -2027,6 +2356,9 @@ void oneway_benchmark_tag_main(void)
     dwt_rxenable(DWT_START_RX_IMMEDIATE);
 
     while (1) {
+#if PRODUCT_UART_CMD_ENABLE
+        product_uart_cmd_poll();
+#endif
         uint32_t st = dwt_read32bitreg(SYS_STATUS_ID);
 
         if ((st & SYS_STATUS_RXFCG_BIT_MASK) != 0U) {
@@ -2657,6 +2989,53 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
                 if (warn_rssi_low) { twr_reason_add(reason_str, sizeof(reason_str), "rssi_low"); }
             }
 
+#if (UWB_RF_CHANNEL == 9)
+            /* CH9: diagnostics corruption and physically invalid ranges remain
+             * hard rejects. FP/SNR/MP failures are measurement candidates and
+             * therefore update the TAG-side diagnostic filter at a useful
+             * minimum weight instead of being held indefinitely. */
+            const bool ch9_original_quality_ok = quality_ok;
+            const float ch9_raw_mm = (float)(dist * 1000.0);
+            const bool ch9_distance_invalid =
+                (!isfinite(ch9_raw_mm)) ||
+                (ch9_raw_mm <= 0.0f) ||
+                (ch9_raw_mm > (float)UWB_DISTANCE_LPF_MAX_MM);
+            const bool ch9_hard_reject = fail_diag || ch9_distance_invalid;
+            const bool ch9_weight_warning =
+                (qw_reason != NULL) && (strcmp(qw_reason, "ok") != 0);
+            bool ch9_soft_accept = false;
+
+            if (ch9_distance_invalid) {
+                twr_reason_add(reason_str, sizeof(reason_str), "invalid_distance");
+            }
+            if (ch9_weight_warning) {
+                twr_reason_add(reason_str, sizeof(reason_str), qw_reason);
+            }
+
+            if (ch9_hard_reject) {
+                quality_ok = false;
+            } else if ((!quality_ok) || warn_rssi_low || ch9_weight_warning) {
+                ch9_soft_accept = true;
+                quality_ok = true;
+                if (q_weight < 35U) {
+                    q_weight = 35U;
+                }
+            }
+
+#if UWB_CH9_FILTER_DEBUG
+            uwb_ch9_quality_debug_log(
+                uwb_round_mm(ch9_raw_mm),
+                ch9_original_quality_ok,
+                reason_str,
+                ch9_hard_reject ? "hard_reject" :
+                    (ch9_soft_accept ? "soft_accept" : "normal"),
+                ch9_soft_accept ? "35+" : "native",
+                -1L);
+#endif
+            (void)ch9_original_quality_ok;
+            (void)ch9_soft_accept;
+#endif
+
             const char* quality_fail_reason = NULL;
             if (!quality_ok) {
                 quality_fail_reason = reason_str;
@@ -2779,7 +3158,7 @@ static void uwb_can_send_anchor_comm_lost_mm(uint16_t aid, const char *reason)
      * Communication-lost marker policy:
      * Send -1 mm when a ranging exchange fails or the anchor remains link-lost.
      * Rate-limit this path so repeated RX timeouts / low-power keepalives do not flood the CAN bus.
-     */
+     */
     uint32_t now_ms = HAL_GetTick();
     static uint32_t s_comm_lost_last_ms[NUM_OF_ANCHORS] = {0U};
     int8_t mapped_slot = twr_anchor_slot_from_id(aid);
@@ -2880,6 +3259,9 @@ void tag_main(void) {
 
     while (1)
     {
+#if PRODUCT_UART_CMD_ENABLE
+        product_uart_cmd_poll();
+#endif
         uint32_t t_now_us = micros();
         uint32_t t_start_us = t_now_us;
         
@@ -3016,6 +3398,28 @@ void tag_main(void) {
 
 #if !DS_BOUNDED_SCHEDULER
         /* 2nd pass: Retry only failures once after recovery */
+        for (uint8_t i = 0; i < n; i++) {
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
+            if (product_standby_request_is_latched()) {
+                dwt_forcetrxoff();
+                product_handle_low_power_logic("TAG");
+                standby_latch_seen = true;
+                break;
+            }
+#endif
+            if (ok[i]) continue;
+            uint16_t aid = g_sys_cfg.anchor_ids[i];
+            if (aid == 0U) continue;
+
+            dw_recover_idle();
+            ok[i] = poll_one_aid(aid, &dist_m[i]);
+        }
+#endif
+
+#if !DS_BOUNDED_SCHEDULER && (UWB_RF_CHANNEL == 9)
+        /* 3rd pass: CH9 robot shielding recovery
+         * Robot body blocks LOS during rotation; a second retry
+         * covers the ~100-200ms window until the antenna clears. */
         for (uint8_t i = 0; i < n; i++) {
 #if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
             if (product_standby_request_is_latched()) {
@@ -3245,6 +3649,9 @@ void anchor_main()
 
     while (1)
     {
+#if PRODUCT_UART_CMD_ENABLE
+        product_uart_cmd_poll();
+#endif
 #if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
         product_handle_low_power_logic("ANC");
 #endif
@@ -3279,6 +3686,9 @@ void anchor_main()
 #endif
         do
         {
+#if PRODUCT_UART_CMD_ENABLE
+            product_uart_cmd_poll();
+#endif
             uint32_t tick_ms = HAL_GetTick();
 
 #if PRODUCT_EXPERIMENTAL_DW3000_SLEEP
@@ -3803,14 +4213,71 @@ void anchor_main()
 
             /* Read anchor-side final_rx timestamp */
             uint32_t anc_final_rx_ts = dwt_readrxtimestamplo32();
+            dwt_rxdiag_t diag;
+            memset(&diag, 0, sizeof(diag));
+            dwt_readdiagnostics(&diag);
 #if UWB_RXDIAG_LOG_ENABLE
-            {
-                dwt_rxdiag_t diag;
-                memset(&diag, 0, sizeof(diag));
-                dwt_readdiagnostics(&diag);
-                uwb_rxdiag_print_anchor(g_sys_cfg.short_addr, final_src_addr, &diag);
-            }
+            uwb_rxdiag_print_anchor(g_sys_cfg.short_addr, final_src_addr, &diag);
 #endif
+            twr_quality_t anc_q = twr_quality_from_diag(&diag);
+            bool anc_diag_ok = twr_diag_is_sane(&diag);
+            if (!anc_diag_ok) {
+#if (UWB_RF_CHANNEL == 9)
+                uint32_t diag_now_ms = HAL_GetTick();
+                int8_t diag_slot = twr_anchor_slot_from_id(g_sys_cfg.short_addr);
+                uint8_t diag_idx = (diag_slot >= 0) ? (uint8_t)diag_slot : 0U;
+                if (diag_idx >= NUM_OF_ANCHORS) {
+                    diag_idx = 0U;
+                }
+
+                if (g_anc_diag_insane_count[diag_idx] == 0U) {
+                    g_anc_diag_insane_first_tick_ms[diag_idx] = diag_now_ms;
+                }
+                if (g_anc_diag_insane_count[diag_idx] < 255U) {
+                    g_anc_diag_insane_count[diag_idx]++;
+                }
+
+                uint32_t diag_elapsed_ms = (uint32_t)(diag_now_ms -
+                    g_anc_diag_insane_first_tick_ms[diag_idx]);
+                uint32_t last_valid_age_ms = (uint32_t)(diag_now_ms -
+                    g_anc_last_valid_tick_ms[diag_idx]);
+                bool within_count =
+                    (g_anc_diag_insane_count[diag_idx] <
+                     UWB_CH9_DIAG_INSANE_MAX_COUNT);
+                bool within_time =
+                    (diag_elapsed_ms < UWB_CH9_DIAG_INSANE_HOLD_MS);
+                bool have_recent_valid =
+                    (g_anc_last_valid_dist_mm[diag_idx] > 100L) &&
+                    (g_anc_last_valid_tick_ms[diag_idx] != 0U) &&
+                    (last_valid_age_ms <= UWB_CH9_DIAG_INSANE_HOLD_MS);
+
+#if UWB_CH9_FILTER_DEBUG
+                uwb_ch9_diag_insane_debug_log(
+                    g_sys_cfg.short_addr, &diag);
+#endif
+
+                if (within_count && within_time && have_recent_valid) {
+                    uwb_can_send_anchor_distance_mm(
+                        g_sys_cfg.short_addr,
+                        g_anc_last_valid_dist_mm[diag_idx]);
+                    printf("[ANC][DIAG_HOLD] AID=0x%04X dist=%ld reason=diag_insane count=%u age=%lu\r\n",
+                           (unsigned int)g_sys_cfg.short_addr,
+                           g_anc_last_valid_dist_mm[diag_idx],
+                           (unsigned int)g_anc_diag_insane_count[diag_idx],
+                           (unsigned long)last_valid_age_ms);
+                    dwt_forcetrxoff();
+                    continue;
+                }
+
+#if UWB_CH9_FILTER_DEBUG
+                uwb_ch9_quality_debug_log(
+                    -1L, false, "diag_insane", "hard_reject", "n/a", -1L);
+#endif
+#endif
+                uwb_can_send_anchor_comm_lost_mm(g_sys_cfg.short_addr, "diag_insane");
+                dwt_forcetrxoff();
+                continue;
+            }
 #if DS_ANCHOR_OBS_SUMMARY
             g_anc_obs_summary.final_rx_ok_count++;
 #endif
@@ -3853,35 +4320,239 @@ void anchor_main()
             double ds_dist = tof * SPEED_OF_LIGHT;
             if (ds_dist < 0.0) ds_dist = 0.0;
 
+            /* Resolve per-anchor filter slot */
+            int8_t anc_slot = twr_anchor_slot_from_id(g_sys_cfg.short_addr);
+            uint8_t anc_idx = (anc_slot >= 0) ? (uint8_t)anc_slot : 0U;
+            if (anc_idx >= NUM_OF_ANCHORS) anc_idx = 0U;
+
+#if (UWB_RF_CHANNEL == 9)
+            if (isfinite(ds_dist) &&
+                (ds_dist > 0.0) &&
+                (ds_dist <= ((double)UWB_DISTANCE_LPF_MAX_MM / 1000.0))) {
+#else
             if (ds_dist > 0.0) {
+#endif
                 double d_mm = ds_dist * 1000.0;
                 if (d_mm > 2147483647.0) d_mm = 2147483647.0;
 
                 long raw_input_mm = (long)d_mm;
-                long can_dist_mm = raw_input_mm;
 
-                /*
-                 * Raw-distance output policy:
-                 * Do not apply any distance filter in the UWB anchor firmware.
-                 * The CAN collector board is responsible for filtering/fusion.
+                /* NLOS-fused alpha:
+                 * los_confidence combines mp_score and nlos_score into
+                 * a single 0.0~1.0 signal of first-path reliability.
+                 * base_alpha_permille is then set dynamically so the
+                 * uwb_distance_lpf tracks fast on LoS and slow on NLOS.
                  *
-                 * Keep dist and rawDist identical here so logs and CAN payload
-                 * prove that the transmitted value is the raw DS-TWR distance.
-                 */
-                uint32_t can_id = 0x200U + (g_sys_cfg.short_addr & 0x0FU);
+                 * Range: 50 permille (heavy NLOS) ~ 300 permille (clean LoS)
+                 * uwb_distance_lpf's dynamic alpha will further scale within
+                 * [MIN_ALPHA, MAX_ALPHA] on top of this base. */
+                float mp_norm   = (float)anc_q.mp_score   / 100.0f;
+                float nlos_norm = (float)anc_q.nlos_score / 100.0f;
+                float los_conf  = mp_norm * (1.0f - nlos_norm);
+                if (los_conf < 0.0f) los_conf = 0.0f;
+                if (los_conf > 1.0f) los_conf = 1.0f;
 
-                /* CAN에는 raw 거리 전송 */
-                uwb_can_send_anchor_distance_mm(g_sys_cfg.short_addr, can_dist_mm);
+#if (UWB_RF_CHANNEL == 9)
+                /* A sane CH9 frame is never rejected solely for weak/NLOS
+                 * diagnostics. Keep it as a Kalman candidate with a bounded
+                 * confidence floor; LPF MAX_STEP owns output stability. */
+                const bool ch9_anchor_soft_accept =
+                    (anc_q.nlos_score > 0U) ||
+                    (anc_q.mp_score < TWR_QUAL_MIN_MP) ||
+                    (anc_q.snr_score < TWR_QUAL_MIN_SNR) ||
+                    (anc_q.rssi_score < TWR_QUAL_WARN_RSSI);
 
-                uint16_t final_src = get_u16_le(&final_buf[FINAL_SRC_ADDR_IDX]);
-                printf("[ANC][DS][DIST] AID=0x%04X src=0x%04X dist=%ldmm rawDist=%ldmm can_id=0x%lX\r\n",
-                    (unsigned int)g_sys_cfg.short_addr,
-                    (unsigned int)final_src,
-                    can_dist_mm,
+                if (ch9_anchor_soft_accept && (los_conf < 0.45f)) {
+                    los_conf = 0.45f;
+                }
+
+#if UWB_CH9_FILTER_DEBUG
+                char ch9_reason[48];
+                ch9_reason[0] = '\0';
+                if (anc_q.nlos_score > 0U) {
+                    twr_reason_add(ch9_reason, sizeof(ch9_reason), "nlos");
+                }
+                if (anc_q.mp_score < TWR_QUAL_MIN_MP) {
+                    twr_reason_add(ch9_reason, sizeof(ch9_reason), "mp");
+                }
+                if (anc_q.snr_score < TWR_QUAL_MIN_SNR) {
+                    twr_reason_add(ch9_reason, sizeof(ch9_reason), "snr");
+                }
+                if (anc_q.rssi_score < TWR_QUAL_WARN_RSSI) {
+                    twr_reason_add(ch9_reason, sizeof(ch9_reason), "rssi_low");
+                }
+                uwb_ch9_quality_debug_log(
                     raw_input_mm,
-                    (unsigned long)can_id);
+                    !ch9_anchor_soft_accept,
+                    ch9_reason,
+                    ch9_anchor_soft_accept ? "soft_accept" : "normal",
+                    "n/a",
+                    (long)(los_conf * 100.0f));
+#endif
+#endif
+
+                /* CH9 uses a conservative fixed base; measurement delta still
+                 * raises the effective alpha inside uwb_distance_lpf. CH5
+                 * retains its existing LoS-adaptive base unchanged. */
+#if (UWB_RF_CHANNEL == 9)
+                int32_t fused_alpha_permille =
+                    UWB_DISTANCE_LPF_BASE_ALPHA_PERMILLE;
+#else
+                int32_t fused_alpha_permille =
+                    150L + (int32_t)(los_conf * 250.0f);
+                if (fused_alpha_permille > 400L) fused_alpha_permille = 400L;
+#endif
+
+                /* Inject fused alpha into LPF before update */
+                g_anc_lpf[anc_idx].base_alpha_permille = fused_alpha_permille;
+
+                /* Apply anchor-side LPF tuning for moving target tracking */
+                g_anc_lpf[anc_idx].max_step_mm        = UWB_ANC_LPF_MAX_STEP_MM;
+                g_anc_lpf[anc_idx].spike_threshold_mm = UWB_ANC_LPF_SPIKE_THRESHOLD_MM;
+                g_anc_lpf[anc_idx].jump_threshold_mm  = UWB_ANC_LPF_JUMP_THRESHOLD_MM;
+                g_anc_lpf[anc_idx].stable_spread_mm   = UWB_ANC_LPF_STABLE_SPREAD_MM;
+                g_anc_lpf[anc_idx].resync_delta_mm    = UWB_ANC_LPF_RESYNC_DELTA_MM;
+
+                long lpf_dist_mm = (long)uwb_distance_lpf_update_mm(
+                    &g_anc_lpf[anc_idx], (int32_t)raw_input_mm);
+
+                long raw_lpf_delta_mm = raw_input_mm - lpf_dist_mm;
+                long abs_raw_lpf_delta_mm = (raw_lpf_delta_mm >= 0L)
+                    ? raw_lpf_delta_mm : -raw_lpf_delta_mm;
+                int8_t delta_sign = (raw_lpf_delta_mm > 0L) ? 1 :
+                    ((raw_lpf_delta_mm < 0L) ? -1 : 0);
+
+                if ((abs_raw_lpf_delta_mm > UWB_ANC_DIVERGE_RESET_MM) &&
+                    (delta_sign != 0)) {
+                    if (g_anc_diverge_sign[anc_idx] == delta_sign) {
+                        if (g_anc_diverge_count[anc_idx] < 255U) {
+                            g_anc_diverge_count[anc_idx]++;
+                        }
+                    } else {
+                        g_anc_diverge_sign[anc_idx] = delta_sign;
+                        g_anc_diverge_count[anc_idx] = 1U;
+                    }
+                } else {
+                    g_anc_diverge_sign[anc_idx] = 0;
+                    g_anc_diverge_count[anc_idx] = 0U;
+                }
+
+                if (g_anc_diverge_count[anc_idx] >= UWB_ANC_DIVERGE_COUNT_LIMIT) {
+                    long old_lpf_mm = lpf_dist_mm;
+                    uwb_distance_lpf_reset(&g_anc_lpf[anc_idx]);
+                    uwb_kf1d_reset(&g_anc_kf[anc_idx]);
+
+                    g_anc_lpf[anc_idx].base_alpha_permille = fused_alpha_permille;
+                    g_anc_lpf[anc_idx].max_step_mm        = UWB_ANC_LPF_MAX_STEP_MM;
+                    g_anc_lpf[anc_idx].spike_threshold_mm = UWB_ANC_LPF_SPIKE_THRESHOLD_MM;
+                    g_anc_lpf[anc_idx].jump_threshold_mm  = UWB_ANC_LPF_JUMP_THRESHOLD_MM;
+                    g_anc_lpf[anc_idx].stable_spread_mm   = UWB_ANC_LPF_STABLE_SPREAD_MM;
+                    g_anc_lpf[anc_idx].resync_delta_mm    = UWB_ANC_LPF_RESYNC_DELTA_MM;
+
+                    lpf_dist_mm = (long)uwb_distance_lpf_update_mm(
+                        &g_anc_lpf[anc_idx], (int32_t)raw_input_mm);
+                    g_anc_diverge_sign[anc_idx] = 0;
+                    g_anc_diverge_count[anc_idx] = 0U;
+                    printf("[ANC][FILTER][RESYNC] AID=0x%04X raw=%ld old_lpf=%ld reason=raw_lpf_diverge\r\n",
+                        (unsigned int)g_sys_cfg.short_addr,
+                        raw_input_mm,
+                        old_lpf_mm);
+                }
+
+                /* dt from HAL_GetTick() inter-measurement interval.
+                 * Ra (DS-TWR internal round-trip) is ~1-10ms and does NOT
+                 * represent the ranging period. At 3Hz, real dt ~= 333ms. */
+                uint32_t now_tick_ms = HAL_GetTick();
+                uint32_t elapsed_ms = (uint32_t)(now_tick_ms - g_anc_kf_last_tick_ms[anc_idx]);
+                g_anc_kf_last_tick_ms[anc_idx] = now_tick_ms;
+                float dt_s = (float)elapsed_ms / 1000.0f;
+                if (dt_s < UWB_KF_DT_MIN_S) dt_s = UWB_KF_DT_MIN_S;
+                if (dt_s > UWB_KF_DT_MAX_S) dt_s = UWB_KF_DT_MAX_S;
+
+                float kf_out = uwb_kf1d_update(
+                    &g_anc_kf[anc_idx],
+                    (float)lpf_dist_mm,
+                    dt_s,
+                    los_conf);
+
+                if ((!isfinite(kf_out)) || (kf_out <= 100.0f)) {
+                    uwb_can_send_anchor_comm_lost_mm(
+                        g_sys_cfg.short_addr, "kf_floor_invalid");
+                    printf("[ANC][DS][INVALID] AID=0x%04X reason=%s lpf=%ld rawDist=%ld\r\n",
+                        (unsigned int)g_sys_cfg.short_addr,
+                        "kf_floor_invalid",
+                        lpf_dist_mm,
+                        raw_input_mm);
+                } else {
+                    long can_dist_mm = (long)(kf_out + 0.5f);
+                    if (can_dist_mm <= 100L) {
+                        uwb_can_send_anchor_comm_lost_mm(
+                            g_sys_cfg.short_addr, "kf_floor_invalid");
+                        printf("[ANC][DS][INVALID] AID=0x%04X reason=%s lpf=%ld rawDist=%ld\r\n",
+                            (unsigned int)g_sys_cfg.short_addr,
+                            "kf_floor_invalid",
+                            lpf_dist_mm,
+                            raw_input_mm);
+                    } else {
+                        uint32_t can_id = 0x200U + (g_sys_cfg.short_addr & 0x0FU);
+                        uwb_can_send_anchor_distance_mm(g_sys_cfg.short_addr, can_dist_mm);
+
+                        g_anc_last_valid_dist_mm[anc_idx] = can_dist_mm;
+                        g_anc_last_valid_tick_ms[anc_idx] = HAL_GetTick();
+#if (UWB_RF_CHANNEL == 9)
+                        g_anc_diag_insane_count[anc_idx] = 0U;
+                        g_anc_diag_insane_first_tick_ms[anc_idx] = 0U;
+#endif
+
+                        uint16_t final_src = get_u16_le(&final_buf[FINAL_SRC_ADDR_IDX]);
+                        printf("[ANC][DS][DIST] AID=0x%04X src=0x%04X"
+                               " dist=%ldmm lpf=%ldmm rawDist=%ldmm"
+                               " mp=%u nlos=%u base_alpha=%ld"
+                               " dt_ms=%ld can_id=0x%lX\r\n",
+                            (unsigned int)g_sys_cfg.short_addr,
+                            (unsigned int)final_src,
+                            can_dist_mm,
+                            lpf_dist_mm,
+                            raw_input_mm,
+                            (unsigned int)anc_q.mp_score,
+                            (unsigned int)anc_q.nlos_score,
+                            (long)fused_alpha_permille,
+                            (long)(dt_s * 1000.0f),
+                            (unsigned long)can_id);
+                    }
+                }
             } else {
-                uwb_can_send_anchor_comm_lost_mm(g_sys_cfg.short_addr, "invalid_distance");
+#if (UWB_RF_CHANNEL == 9) && UWB_CH9_FILTER_DEBUG
+                uwb_ch9_quality_debug_log(
+                    -1L, false, "invalid_distance", "hard_reject", "n/a", -1L);
+#endif
+                /* Hold last valid Kalman estimate only when explicitly enabled. */
+#if (UWB_ANC_HOLD_LAST_DIST_MS == 0U)
+                uwb_can_send_anchor_comm_lost_mm(
+                    g_sys_cfg.short_addr, "invalid_distance");
+                printf("[ANC][DS][INVALID] AID=0x%04X reason=%s lpf=%ld rawDist=%ld\r\n",
+                    (unsigned int)g_sys_cfg.short_addr,
+                    "invalid_distance",
+                    -1L,
+                    -1L);
+#else
+                uint32_t hold_elapsed_ms = (uint32_t)(HAL_GetTick()
+                    - g_anc_last_valid_tick_ms[anc_idx]);
+                if ((g_anc_last_valid_dist_mm[anc_idx] > 100L) &&
+                    (hold_elapsed_ms < UWB_ANC_HOLD_LAST_DIST_MS)) {
+                    uwb_can_send_anchor_distance_mm(
+                        g_sys_cfg.short_addr,
+                        g_anc_last_valid_dist_mm[anc_idx]);
+                } else {
+                    uwb_can_send_anchor_comm_lost_mm(
+                        g_sys_cfg.short_addr, "invalid_distance");
+                    printf("[ANC][DS][INVALID] AID=0x%04X reason=%s lpf=%ld rawDist=%ld\r\n",
+                        (unsigned int)g_sys_cfg.short_addr,
+                        "invalid_distance",
+                        -1L,
+                        -1L);
+                }
+#endif
             }
         } else {
             /* SS-TWR: no further action after RESP TX */
@@ -4096,6 +4767,9 @@ int main(void)
 
   MX_SPI1_Init();
   MX_LPUART1_UART_Init();
+#if PRODUCT_UART_CMD_ENABLE
+  product_uart_cmd_start_rx();
+#endif
 
 #if (PRODUCT_GPIO_DIAG == 1)
   product_gpio_diag_blink(4);
@@ -4382,7 +5056,7 @@ void SystemClock_Config(void)
     }
 
     /** Initializes the CPU, AHB and APB buses clocks
-     */
+     */
     RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
     RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
     RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;

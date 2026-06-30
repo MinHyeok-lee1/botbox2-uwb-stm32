@@ -132,8 +132,13 @@ twr_quality_t twr_quality_from_diag(const dwt_rxdiag_t *d)
     // 1) RSSI 점수 (0~100) : cir_pwr 기반 간단 스케일링
     {
         uint32_t rssi_proxy = cir_pwr;
-        const uint32_t RSSI_MIN = 20U;   // Δ2: 현재 로그 범위(28~50)에 맞게 재튜닝
-        const uint32_t RSSI_MAX = 55U;   // Δ2: 현재 로그 범위(28~50)에 맞게 재튜닝
+#if defined(UWB_RF_CHANNEL) && (UWB_RF_CHANNEL == 9)
+        const uint32_t RSSI_MIN = 50U;   // field cir min observed: ~56
+        const uint32_t RSSI_MAX = 110U;  // field cir max observed: ~100, with margin
+#else
+        const uint32_t RSSI_MIN = 20U;   // CH5 tuned range.
+        const uint32_t RSSI_MAX = 55U;
+#endif
 
         uint8_t score = 0;
         if (rssi_proxy <= RSSI_MIN) {
@@ -230,9 +235,16 @@ twr_quality_t twr_quality_from_diag(const dwt_rxdiag_t *d)
             q.fp_win_to_peak_x100 = 0U;
         }
 
-        // fp_to_peak_x100: set to 0 if domain mismatch is uncertain
-        // (peak_amp and fp_est are both amplitude-like but exact domain relationship unclear)
-        q.fp_to_peak_x100 = 0U;
+        /* fp_to_peak_x100: fp_est (max of F1/F2/F3) vs peak_amp ratio.
+         * Both are in the same CIR amplitude domain. Ratio < 70 means
+         * the strongest path is well above the first-path window -> NLOS signal. */
+        if (peak_amp > 0U) {
+            uint32_t fp_to_peak = (fp_est * 100UL) / peak_amp;
+            if (fp_to_peak > 100U) fp_to_peak = 100U;
+            q.fp_to_peak_x100 = (uint16_t)fp_to_peak;
+        } else {
+            q.fp_to_peak_x100 = 0U;
+        }
 
         // nlos_score: log-only heuristic (using now-meaningful fpwin2peak)
         uint32_t nlos = 0U;
