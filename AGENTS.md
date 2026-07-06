@@ -39,6 +39,7 @@
 ## 로컬 pre-commit hook 안내
 
 - 버전관리 원본: `..\tools\git-hooks\pre-commit`
+- 공유 도구(`tools/`)는 이제 `UWB_STM32` 루트 자체의 별도 Git 저장소에서 버전관리된다.
 - 기본 설치 위치: `.git\hooks\pre-commit`
 - 버전관리 원본을 직접 사용하려면 이 저장소에서 `git config core.hooksPath ../tools/git-hooks`를 실행한다.
 - hook은 커밋 전에 루트의 `tools/check_repo_boundaries.ps1`을 실행하며, FAIL은 커밋을 차단하고 WARN은 출력만 한다.
