@@ -1,5 +1,8 @@
 # 에이전트 지침: 자율 코딩 규칙 (Agent Directives: Autonomous Coding Rules)
 
+> [!IMPORTANT]
+> 세션 시작 시 `(UWB_STM32 루트)/tools/harness_doctor.ps1`을 먼저 실행한다. MISSING이 있으면 즉시 사용자에게 보고하고 승인 전까지 다른 작업을 진행하지 않는다. WARN은 보고 후 작업을 계속할 수 있다. 스크립트가 없거나 실행에 실패하면 즉시 사용자에게 보고하고 대기한다.
+
 > [!WARNING]
 > **Top-level delivery rule:** This repository must preserve every Product function from 02, but must never contain internal development history, experiment records, private work notes, or uncleaned internal metadata.
 >
