@@ -1,0 +1,17 @@
+name: Repository Boundary Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  boundary-check:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Run Customer boundary scanner
+        shell: pwsh
+        run: ./tools/check_repo_boundaries.ps1

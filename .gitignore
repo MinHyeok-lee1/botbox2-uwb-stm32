@@ -29,3 +29,6 @@ mx.scratch
 !docs/
 !.gitignore
 !.gitattributes
+!/.github/
+!/.github/workflows/
+!/.github/workflows/boundary-check.yml
