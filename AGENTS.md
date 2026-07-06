@@ -47,6 +47,10 @@
 
 이 저장소의 경량 스캐너는 `UWB_STM32/tools`의 공유 스캐너(별도 로컬 Git 저장소로 관리됨)에서 발췌한 것으로, 두 스캐너 로직이 서서히 달라질 수 있다. 검사 규칙 변경 시 양쪽 다 갱신 여부를 확인할 것.
 
+## 정기 boundary CI 안내
+
+저장소별 boundary 스캐너는 GitHub Actions에서 매주 자동 재실행되며, 실패 시 사람이 로그와 위반 후보를 확인해야 한다.
+
 ## 로컬 pre-commit hook 안내
 
 - 버전관리 원본: `..\tools\git-hooks\pre-commit`
