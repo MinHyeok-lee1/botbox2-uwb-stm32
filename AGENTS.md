@@ -36,6 +36,14 @@
   태그 생성 자체도 사용자 승인 후에만 실행한다.
 - 절대 원격 저장소로 push하지 않는다. push 여부는 항상 사용자가 결정한다.
 
+## 로컬 pre-commit hook 안내
+
+- 버전관리 원본: `..\tools\git-hooks\pre-commit`
+- 기본 설치 위치: `.git\hooks\pre-commit`
+- 버전관리 원본을 직접 사용하려면 이 저장소에서 `git config core.hooksPath ../tools/git-hooks`를 실행한다.
+- hook은 커밋 전에 루트의 `tools/check_repo_boundaries.ps1`을 실행하며, FAIL은 커밋을 차단하고 WARN은 출력만 한다.
+- `tools/boundary_warn_baseline.json` 갱신은 사용자 승인 후 `-AcknowledgeWarnings`를 명시한 경우에만 허용한다.
+
 ---
 
 ## 기본 시작 규칙
