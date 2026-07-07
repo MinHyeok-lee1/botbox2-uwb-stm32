@@ -12,7 +12,7 @@ This customer release is exported from the finalized Product runtime acceptance 
   - `[ANC][RECOV] enter LOW_POWER_LISTEN: tick=... listen_win=250 sleep_win=2250`
 - LED role acceptance: TAG OFF, `0x2001` RED, `0x2002` BLUE, `0x2003` YELLOW
 - Distance output LPF: legacy `lowpassfilter.h` aligned; CAN/log path uses the filtered distance value
-- Internal documentation remains excluded from the customer package: no `docs/antigravity`, no `docs/task.md`, and no `docs/INTERNAL_REFERENCE.md`
+- Customer package scope is limited to customer-facing firmware, configuration, integrity metadata, and operating documentation.
 
 Firmware artifact hashes:
 
