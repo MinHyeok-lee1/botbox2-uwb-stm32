@@ -1,8 +1,16 @@
 # STM32 DW3000 IOC-Shell (현재 상태: 통합 완료)
 
+> [!IMPORTANT]
+> **Start here — 03 Customer**
+> - 역할: 승인된 제품 기능과 설정 절차를 제공하는 고객 인도용 저장소입니다.
+> - 금지: 런타임 로직 또는 CAN 계약을 이 저장소에서 독립적으로 변경하지 마십시오.
+> - 고객 인도 범위를 벗어난 자료를 추가하지 마십시오.
+> - 먼저 [AGENTS.md](AGENTS.md), 이어서 [docs/PRODUCT_QUICK_START.md](docs/PRODUCT_QUICK_START.md)를 읽으십시오.
+> - 설치와 설정은 [docs/PRODUCT_PROVISIONING_GUIDE.md](docs/PRODUCT_PROVISIONING_GUIDE.md)를 참고하십시오.
+
 ## Documentation Entry
 
-Start here for the 02 Product runtime/release repo:
+Start here for the 03 Customer delivery repo:
 
 - New session context: upload `C:\Users\ryan\dev\embedded\UWB_STM32\UWB_PROJECT_SESSION_HANDOFF_v1.0.0.md`.
 - Command index: `docs/COMMAND_INDEX.md`.
