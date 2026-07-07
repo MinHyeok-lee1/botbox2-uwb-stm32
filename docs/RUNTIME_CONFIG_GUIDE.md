@@ -68,7 +68,7 @@
 
 `delivery/configs/` 경로에는 사전 검증이 완료된 설정 파일들이 포함됩니다.
 
-`cfg/presets/` 경로에는 `cfg.bin`을 대체하지 않는 runtime preset sidecar manifest가 있습니다. 위치와 사용법은 `cfg/presets/README.md`를 기준으로 하고, 정책 checkpoint는 `docs/antigravity/analysis/2026-04-28-runtime-preset-policy-checkpoint.md`, host validation 결과 연결 정책은 `docs/antigravity/plans/2026-04-28-preset-host-validation-link-policy.md`를 참조합니다.
+`cfg.bin` is the runtime configuration input. Use only validated configuration files included in the customer delivery package; internal policy and host-validation records are maintained outside this repository.
 
 ### 3-1. 골든 프리셋 (Golden Presets)
 - `tag_a1001_ss_3a_p2001.bin`
@@ -337,4 +337,4 @@ ANCHOR의 저전력 정책 및 로그 가시성 정책은 하드웨어 검증이
 * 하드웨어 수정 이후의 최종 튜닝 결과
 * 앵커 수 스케일링 최종 운영값
 
-이 항목들은 현재 프로젝트에서 **후속 과제**로 진행 중이며, 최종 확정 전까지는 `README.md`와 `task.md`의 최신 상태를 함께 확인해야 합니다.
+이 항목들은 현재 프로젝트에서 **후속 과제**로 진행 중이며, 최종 확정 전까지는 고객 전달 범위에 포함된 최신 안내 문서를 확인해야 합니다.

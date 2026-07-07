@@ -12,7 +12,7 @@
 
 Start here for the 03 Customer delivery repo:
 
-- New session context: upload `C:\Users\ryan\dev\embedded\UWB_STM32\UWB_PROJECT_SESSION_HANDOFF_v1.0.0.md`.
+- Repository guidance: use the customer-delivery documents listed below; no external workspace handoff file is required.
 - Command index: `docs/COMMAND_INDEX.md`.
 - Operator workflow: `docs/OPERATOR_QUICK_COMMANDS.md`.
 - Product overview and setup: `docs/PRODUCT_OVERVIEW.md`, then `docs/PRODUCT_QUICK_START.md`.
@@ -24,7 +24,7 @@ Product release gate:
 powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 gate -Repo product
 ```
 
-This repo owns Product runtime, Product board integration, release acceptance, and Product-to-Customer export source. Product acceptance evidence stays here, not in Customer.
+The Product repository owns runtime integration, board integration, release acceptance, and acceptance evidence. This repository preserves only the accepted, sanitized customer-delivery state and does not own Product acceptance evidence.
 
 ## Current Release Status
 
