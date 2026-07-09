@@ -8,7 +8,7 @@ All commands are Windows PowerShell one-line commands. Do not use Bash line cont
 
 ### 1. Customer ANCHOR1 Flash
 
-Use this for the common field validation flash. Risk: flashes Customer `delivery\firmware.bin` and selected cfg to the target board.
+Use this for the common field validation flash. Risk: flashes Customer firmware variants (e.g. delivery\firmware_product_ch5.bin) and selected cfg to the target board.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 customer-flash -Role anc1 -Mode ds -Sn 0032002E3234510A37333934

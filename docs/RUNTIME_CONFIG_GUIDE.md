@@ -8,14 +8,14 @@
 ### 1-1. 고정형 펌웨어 / 교체형 설정 원칙 (Fixed Firmware / Replaceable Config Principle)
 본 UWB 솔루션은 **"고정형 펌웨어 + 교체형 설정"** 원칙으로 설계되어, 현장 운영의 복잡성을 최소화합니다.
 
-- **펌웨어 자산 (`delivery/firmware.bin`)**
-  - UWB 통신 엔진, 필터, 역할 디스패치(role dispatch), 지속성 적용 흐름을 포함하는 단일 통합 실행 파일
+- **펌웨어 자산 (`delivery/firmware_product_ch*.bin` 및 `delivery/firmware_rxdiag_ch*.bin`)**
+  - UWB 통신 엔진, 필터, 역할 디스패치(role dispatch), 지속성 적용 흐름을 포함하는 통합 실행 파일 세트 (CH5/CH9 용도별 제품용 및 진단용 변형 바이너리)
   - 현장에서는 자주 바뀌지 않는 **고정 자산**
 - **설정 자산 (`delivery/configs/*.bin`)**
   - TAG/ANCHOR 역할, PAN ID, Short Address, 앵커 목록 등 장비별 운용 정보를 담는 40바이트 설정 파일
   - 현장에서는 용도에 따라 교체 가능한 **운영 자산**
 
-즉, 현장에서는 **역할별 펌웨어를 따로 굽는 모델이 아니라**, 동일한 `firmware.bin`을 유지한 채 `cfg.bin`만 바꿔 역할과 주소 체계를 전환하는 것이 표준입니다.
+즉, 현장에서는 **역할별 펌웨어를 따로 빌드하거나 굽는 모델이 아니라**, 해당 채널/프로파일에 맞는 고정 펌웨어 바이너리를 유지한 채 `cfg.bin`만 바꿔 역할과 주소 체계를 전환하는 것이 표준입니다.
 
 ### 1-2. 현장 운영 시 변경되는 항목 (What changes in field operation)
 현장에서는 아래 항목만 바뀝니다.
@@ -118,10 +118,10 @@
 
 ### 4-2. 전체 프로비저닝 (검증된 명령문) (Full Provisioning)
 ```powershell
-.\tools\provision.ps1 -sn 002E002B3234511137333934 -fw delivery\firmware.bin -cfg delivery\configs\anc_a2001_ss_p2001.bin
-.\tools\provision.ps1 -sn 0027003F3234510F37333934 -fw delivery\firmware.bin -cfg delivery\configs\anc_a2002_ss_p2001.bin
-.\tools\provision.ps1 -sn 003D002A3234511137333934 -fw delivery\firmware.bin -cfg delivery\configs\anc_a2003_ss_p2001.bin
-.\tools\provision.ps1 -sn 004D003D3234510F37333934 -fw delivery\firmware.bin -cfg delivery\configs\tag_a1001_ss_3a_p2001.bin
+.\tools\provision.ps1 -sn 002E002B3234511137333934 -fw delivery\firmware_product_ch5.bin -cfg delivery\configs\anc_a2001_ss_p2001.bin
+.\tools\provision.ps1 -sn 0027003F3234510F37333934 -fw delivery\firmware_product_ch5.bin -cfg delivery\configs\anc_a2002_ss_p2001.bin
+.\tools\provision.ps1 -sn 003D002A3234511137333934 -fw delivery\firmware_product_ch5.bin -cfg delivery\configs\anc_a2003_ss_p2001.bin
+.\tools\provision.ps1 -sn 004D003D3234510F37333934 -fw delivery\firmware_product_ch5.bin -cfg delivery\configs\tag_a1001_ss_3a_p2001.bin
 ```
 
 ### 4-3. 일반 운영 시나리오 (General Operation Scenarios)
@@ -129,7 +129,7 @@
 #### 신규 디바이스 완전 배포
 
 ```powershell
-.\tools\provision.ps1 -sn <SN> -fw delivery\firmware.bin -cfg delivery\configs\tag_a1001_ss_3a_p2001.bin
+.\tools\provision.ps1 -sn <SN> -fw delivery\firmware_product_ch5.bin -cfg delivery\configs\tag_a1001_ss_3a_p2001.bin
 ```
 
 #### 설정(Config)만 변경
@@ -141,7 +141,7 @@
 #### 펌웨어(Firmware)만 업데이트
 
 ```powershell
-.\tools\provision.ps1 -sn <SN> -fw delivery\firmware.bin
+.\tools\provision.ps1 -sn <SN> -fw delivery\firmware_product_ch5.bin
 ```
 
 ---
@@ -316,7 +316,7 @@ ANCHOR의 저전력 정책 및 로그 가시성 정책은 하드웨어 검증이
 
 스크립트 실행이 불가능한 극한 상황에서만 GUI를 사용하십시오:
 
-1. **펌웨어(Firmware)**: `delivery/firmware.bin` → 주소 `0x08000000`
+1. **펌웨어(Firmware)**: `delivery/firmware_product_ch5.bin` (또는 해당 변형 바이너리) → 주소 `0x08000000`
 2. **설정(Config)**: 대상 `cfg.bin` → 주소 `0x0807F800`
 
 > 주소 오입력 시 부팅이 불가능할 수 있으므로 표준 스크립트 사용을 우선합니다.

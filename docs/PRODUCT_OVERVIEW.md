@@ -7,7 +7,7 @@ STM32CubeMX(IOC Shell)를 기반으로 구축되었으며, 실제 하드웨어 �
 ## 2. 프로젝트 역할 및 관계 (Project Roles and Relationships)
 - **제품 프로젝트 (본 저장소)**:
   - 실제 제품 보드 통합 및 핀맵 결정 소유.
-  - 제품 수용 증거(Product Acceptance evidence) 및 검증 기록 보존.
+  - 승인되고 정화된 제품 배포 바이너리 및 설정 자산 보존 (실제 수용 증거 및 상세 검증 기록은 Product 저장소가 소유).
   - 제품 프로비저닝 및 현장 운영 가이드 제공.
 - **업스트림 참조 프로젝트 (Upstream Reference)**:
   - UWB 알고리즘 검증, 성능 벤치마크, 참조 구현 제공.

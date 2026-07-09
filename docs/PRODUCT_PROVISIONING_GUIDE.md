@@ -4,7 +4,7 @@
 
 ## 1. 배포 모델 (Deployment Model)
 본 프로젝트는 **고정 펌웨어(Golden Firmware) + 교체 가능한 설정(cfg)** 모델을 따릅니다.
-- 동일한 펌웨어 바이너리(`firmware.bin`)를 모든 보드에 사용합니다.
+- 동일한 채널/프로파일용 제품 고정 펌웨어 바이너리(예: `firmware_product_ch5.bin`)를 모든 보드에 사용합니다.
 - 각 보드의 역할(TAG/ANCHOR), ID, 네트워크 설정은 `cfg.bin` 파일에 의해 결정됩니다.
 
 ## 2. 프로비저닝 도구 (Provisioning Tools)
@@ -12,10 +12,10 @@
 
 ### 사용 방법 (Usage)
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\provision.ps1 -sn <ST_LINK_SN> -fw .\delivery\firmware.bin -cfg .\delivery\configs\<cfg>.bin
+powershell -ExecutionPolicy Bypass -File .\tools\provision.ps1 -sn <ST_LINK_SN> -fw .\delivery\firmware_product_ch5.bin -cfg .\delivery\configs\<cfg>.bin
 ```
 
-- **펌웨어 (Firmware)**: `delivery/firmware.bin`
+- **펌웨어 (Firmware)**: `delivery/firmware_product_ch5.bin` 등
 - **설정 파일 (Configs)**: `delivery/configs/*.bin` (보드별 역할에 맞는 파일 선택)
 
 ## 3. 설정 구성 요소 (Configuration Components - cfg)

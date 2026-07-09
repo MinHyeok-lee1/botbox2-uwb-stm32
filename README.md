@@ -29,18 +29,18 @@ The Product repository owns runtime integration, board integration, release acce
 ## Current Release Status
 
 - Current Product baseline: `v1.0.0-product-accepted`
-- This repo is the Product runtime, board integration, release acceptance, and Product-to-Customer export source.
-- Product acceptance evidence stays in this repo, not in Customer.
-- Customer release source: clean export from this Product repo.
+- This repository receives sanitized customer-delivery exports from the Product repository.
+- Product acceptance evidence is owned by the Product repository, not this repository.
+- Customer release source: clean export from the Product repository.
 
 ### Release Firmware Assets
 
 The release package includes the following firmware assets depending on operating profile:
 
-- `firmware.bin` (Default firmware)
-- `firmware_rxdiag.bin`
-- `firmware_product_ch5.bin`
-- `firmware_product_ch9.bin`
+- `firmware_product_ch5.bin` (CH5 제품용 기본 펌웨어)
+- `firmware_product_ch9.bin` (CH9 제품용 기본 펌웨어)
+- `firmware_rxdiag_ch5.bin` (CH5 진단용 펌웨어)
+- `firmware_rxdiag_ch9.bin` (CH9 진단용 펌웨어)
 
 Runtime role, PAN ID, short address, and anchor topology are still controlled by `cfg.bin` at the reserved configuration flash area.
 
@@ -85,7 +85,7 @@ Runtime role, PAN ID, short address, and anchor topology are still controlled by
 
 ## 7. 배포 모델 (Deployment Model)
 본 프로젝트는 **고정 펌웨어(Golden Firmware)** 모델 및 운영 프로필별 release assets 구조를 따릅니다:
-1. **기본 공통 펌웨어 및 변형 바이너리:** 기본 공통 `firmware.bin` 외에도, 특정 운영 환경용 변형 바이너리(예: `firmware_rxdiag.bin`, `firmware_product_ch5.bin`, `firmware_product_ch9.bin`)들이 제공될 수 있습니다.
+1. **운영 프로필별 변형 바이너리:** 각 채널(CH5/CH9) 및 용도(제품용 product / 진단용 rxdiag)에 맞춰 빌드된 4종의 고정형 변형 바이너리(예: `firmware_product_ch5.bin`, `firmware_product_ch9.bin`, `firmware_rxdiag_ch5.bin`, `firmware_rxdiag_ch9.bin`)들이 제공됩니다.
 2. **cfg.bin:** 런타임에 보드의 역할(TAG/ANCHOR), ID 및 레인징 파라미터를 결정하는 소형(40바이트) 설정 파일.
 
 ---

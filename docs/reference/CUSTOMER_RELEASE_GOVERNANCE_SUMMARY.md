@@ -16,10 +16,12 @@ This customer release is exported from the finalized Product runtime acceptance 
 
 Firmware artifact hashes:
 
-| Artifact | SHA256 |
+| Artifact | Description |
 | --- | --- |
-| `delivery/firmware.bin` | `263B1F1BE422F23309791EF8DC111D2CDA8ADD42F17CE419B780EA3A5CB69B06` |
-| `delivery/firmware.hex` | `363F9EA3D3C8E7BFC2D794DE803F38CB0808F4FD3F84CA4C60CD6B26AC26562B` |
+| `delivery/firmware_product_ch5.bin` | CH5 제품용 기본 펌웨어 |
+| `delivery/firmware_product_ch9.bin` | CH9 제품용 기본 펌웨어 |
+| `delivery/firmware_rxdiag_ch5.bin` | CH5 진단용 펌웨어 |
+| `delivery/firmware_rxdiag_ch9.bin` | CH9 진단용 펌웨어 |
 
 ## 1. 목적 (Purpose)
 본 문서는 고객이 인도받은 릴리스 산출물을 확인하고, 해당 산출물의 무결성과 릴리스 가능 여부를 판단하는 기준을 이해하도록 돕는 요약 지침입니다. 제품의 기술적 무결성을 보장하기 위한 공식 승인 체계와 운영 절차를 설명합니다.
@@ -30,7 +32,7 @@ Firmware artifact hashes:
 
 ## 3. 고객 인도 산출물 확인 개요 (Delivery Verification)
 고객은 인도받은 패키지 내 `delivery/` 폴더에 포함된 다음 항목들을 확인해야 합니다.
-- **바이너리**: 펌웨어 실행 파일 (`firmware.bin`, `firmware.hex`).
+- **바이너리**: 펌웨어 실행 파일 (예: `firmware_product_ch5.bin`, `firmware_product_ch9.bin` 등 운영 프로필별 4종 변형 바이너리).
 - **설정 파일**: 각 노드별 설정 바이너리 (`configs/*.bin`).
 - **매니페스트**: 산출물 목록 및 해시 정보 (`manifest.txt`).
 - **운영 가이드**: 런타임 설정 및 프로비저닝 안내 문서.
