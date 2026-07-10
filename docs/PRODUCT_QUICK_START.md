@@ -33,10 +33,10 @@ powershell -ExecutionPolicy Bypass -File .\tools\check_product_contracts.ps1
 # 프로비저닝 템플릿
 # <ST_LINK_SN>: 장치의 ST-LINK 일련번호
 # <cfg>: 선택한 설정 파일 이름 (예: anchor_2001)
-powershell -ExecutionPolicy Bypass -File .\tools\provision.ps1 -sn <ST_LINK_SN> -fw .\delivery\firmware_product_ch5.bin -cfg .\delivery\configs\<cfg>.bin
+powershell -ExecutionPolicy Bypass -File .\tools\provision.ps1 -sn <ST_LINK_SN> -fw .\delivery\firmware.bin -cfg .\delivery\configs\<cfg>.bin
 ```
 
-- **펌웨어 경로 (Firmware Path)**: `delivery/firmware_product_ch5.bin` 등
+- **펌웨어 경로 (Firmware Path)**: `delivery/firmware.bin`
 - **설정 파일 경로 (Config Path)**: `delivery/configs/*.bin`
 
 ## 4. 참고 사항 (Notes)

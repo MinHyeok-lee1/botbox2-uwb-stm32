@@ -1,18 +1,18 @@
 # STM32 DW3000 IOC-Shell (현재 상태: 통합 완료)
 
 > [!IMPORTANT]
-> **Start here — 03 Customer**
-> - 역할: 승인된 제품 기능과 설정 절차를 제공하는 고객 인도용 저장소입니다.
-> - 금지: 런타임 로직 또는 CAN 계약을 이 저장소에서 독립적으로 변경하지 마십시오.
-> - 고객 인도 범위를 벗어난 자료를 추가하지 마십시오.
-> - 먼저 [AGENTS.md](AGENTS.md), 이어서 [docs/PRODUCT_QUICK_START.md](docs/PRODUCT_QUICK_START.md)를 읽으십시오.
-> - 설치와 설정은 [docs/PRODUCT_PROVISIONING_GUIDE.md](docs/PRODUCT_PROVISIONING_GUIDE.md)를 참고하십시오.
+> **Start here — 02 Product**
+> - 역할: CAN, 버튼, standby/wake 및 전원 관리를 포함한 제품 보드 통합 저장소입니다.
+> - 금지: Product 전용 기능을 01 EVB로 역류시키거나 EVB 변경을 검증 없이 통합하지 마십시오.
+> - 제품 반영은 승인된 EVB→Product 흐름과 수동 적응 원칙을 따릅니다.
+> - 먼저 [AGENTS.md](AGENTS.md), 이어서 [docs/COMMAND_INDEX.md](docs/COMMAND_INDEX.md)를 읽으십시오.
+> - 제품 시작 절차는 [docs/PRODUCT_QUICK_START.md](docs/PRODUCT_QUICK_START.md), 공유 하네스는 [../HARNESS.md](../HARNESS.md)를 참고하십시오.
 
 ## Documentation Entry
 
-Start here for the 03 Customer delivery repo:
+Start here for the 02 Product runtime/release repo:
 
-- Repository guidance: use the customer-delivery documents listed below; no external workspace handoff file is required.
+- Repository guidance: see `docs/COMMAND_INDEX.md` and `docs/OPERATOR_QUICK_COMMANDS.md` for onboarding.
 - Command index: `docs/COMMAND_INDEX.md`.
 - Operator workflow: `docs/OPERATOR_QUICK_COMMANDS.md`.
 - Product overview and setup: `docs/PRODUCT_OVERVIEW.md`, then `docs/PRODUCT_QUICK_START.md`.
@@ -24,23 +24,23 @@ Product release gate:
 powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 gate -Repo product
 ```
 
-The Product repository owns runtime integration, board integration, release acceptance, and acceptance evidence. This repository preserves only the accepted, sanitized customer-delivery state and does not own Product acceptance evidence.
+This repo owns Product runtime, Product board integration, release acceptance, and Product-to-Customer export source. Product acceptance evidence stays here, not in Customer.
 
 ## Current Release Status
 
 - Current Product baseline: `v1.0.0-product-accepted`
-- This repository receives sanitized customer-delivery exports from the Product repository.
-- Product acceptance evidence is owned by the Product repository, not this repository.
-- Customer release source: clean export from the Product repository.
+- This repo is the Product runtime, board integration, release acceptance, and Product-to-Customer export source.
+- Product acceptance evidence stays in this repo, not in Customer.
+- Customer release source: clean export from this Product repo.
 
 ### Release Firmware Assets
 
 The release package includes the following firmware assets depending on operating profile:
 
-- `firmware_product_ch5.bin` (CH5 제품용 기본 펌웨어)
-- `firmware_product_ch9.bin` (CH9 제품용 기본 펌웨어)
-- `firmware_rxdiag_ch5.bin` (CH5 진단용 펌웨어)
-- `firmware_rxdiag_ch9.bin` (CH9 진단용 펌웨어)
+- `firmware.bin` (Default firmware)
+- `firmware_rxdiag.bin`
+- `firmware_product_ch5.bin`
+- `firmware_product_ch9.bin`
 
 Runtime role, PAN ID, short address, and anchor topology are still controlled by `cfg.bin` at the reserved configuration flash area.
 
@@ -85,7 +85,7 @@ Runtime role, PAN ID, short address, and anchor topology are still controlled by
 
 ## 7. 배포 모델 (Deployment Model)
 본 프로젝트는 **고정 펌웨어(Golden Firmware)** 모델 및 운영 프로필별 release assets 구조를 따릅니다:
-1. **운영 프로필별 변형 바이너리:** 각 채널(CH5/CH9) 및 용도(제품용 product / 진단용 rxdiag)에 맞춰 빌드된 4종의 고정형 변형 바이너리(예: `firmware_product_ch5.bin`, `firmware_product_ch9.bin`, `firmware_rxdiag_ch5.bin`, `firmware_rxdiag_ch9.bin`)들이 제공됩니다.
+1. **기본 공통 펌웨어 및 변형 바이너리:** 기본 공통 `firmware.bin` 외에도, 특정 운영 환경용 변형 바이너리(예: `firmware_rxdiag.bin`, `firmware_product_ch5.bin`, `firmware_product_ch9.bin`)들이 제공될 수 있습니다.
 2. **cfg.bin:** 런타임에 보드의 역할(TAG/ANCHOR), ID 및 레인징 파라미터를 결정하는 소형(40바이트) 설정 파일.
 
 ---

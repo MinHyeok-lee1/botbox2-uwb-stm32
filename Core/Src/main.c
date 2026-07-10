@@ -1,4 +1,4 @@
-﻿/* USER CODE BEGIN Header */
+/* USER CODE BEGIN Header */
 /**
   ******************************************************************************
   * @file           : main.c
@@ -87,9 +87,10 @@
 #ifndef UWB_CH9_FILTER_DEBUG
 #define UWB_CH9_FILTER_DEBUG 0
 #endif
+#define UWB_DIAG_INSANE_HOLD_MS      600U
+#define UWB_DIAG_INSANE_MAX_COUNT      3U
+
 #if (UWB_RF_CHANNEL == 9)
-#define UWB_CH9_DIAG_INSANE_HOLD_MS      600U
-#define UWB_CH9_DIAG_INSANE_MAX_COUNT      3U
 #define TAG_RANGING_RATE_HZ    5U    // CH9 multipath-tolerant test profile
 #define TAG_ANCHOR_SLOT_MS    55U    // 3 slots + guards + min gap leave 19ms at 5Hz
 #define TAG_MIN_GAP_MS         3U    // Safety floor between scans (ms)
@@ -144,6 +145,10 @@
 
 #ifndef DS_ANCHOR_OBS_SUMMARY
 #define DS_ANCHOR_OBS_SUMMARY 0
+#endif
+
+#ifndef DS_CH9_DIAG
+#define DS_CH9_DIAG 0
 #endif
  
 typedef enum {
@@ -450,12 +455,10 @@ static uint32_t g_anc_kf_last_tick_ms[NUM_OF_ANCHORS];
 static long g_anc_last_valid_dist_mm[NUM_OF_ANCHORS];
 static uint32_t g_anc_last_valid_tick_ms[NUM_OF_ANCHORS];
 
-#if (UWB_RF_CHANNEL == 9)
 /* Per-anchor diagnostic-glitch hold state. Invalid diagnostics never update
  * LPF/KF; short bursts reuse the recent valid CAN distance instead. */
 static uint8_t g_anc_diag_insane_count[NUM_OF_ANCHORS];
 static uint32_t g_anc_diag_insane_first_tick_ms[NUM_OF_ANCHORS];
-#endif
 
 /* How long to hold last valid distance before sending -1 (ms) */
 #ifndef UWB_ANC_HOLD_LAST_DIST_MS
@@ -465,7 +468,7 @@ static uint32_t g_anc_diag_insane_first_tick_ms[NUM_OF_ANCHORS];
 #define UWB_ANC_DIVERGE_RESET_MM      1200L
 #define UWB_ANC_DIVERGE_COUNT_LIMIT   3U
 
-#if (UWB_RF_CHANNEL == 9) && UWB_CH9_FILTER_DEBUG
+#if UWB_CH9_FILTER_DEBUG
 static void uwb_ch9_quality_debug_log(long raw_mm,
                                       bool original_quality_ok,
                                       const char *reason,
@@ -557,10 +560,8 @@ void twr_dist_filter_init(void)
         uwb_kf1d_reset(&g_anc_kf[i]);
         g_anc_diverge_count[i] = 0U;
         g_anc_diverge_sign[i] = 0;
-#if (UWB_RF_CHANNEL == 9)
         g_anc_diag_insane_count[i] = 0U;
         g_anc_diag_insane_first_tick_ms[i] = 0U;
-#endif
     }
 }
 
@@ -2143,6 +2144,159 @@ static inline void set_u16_le(uint8_t *p, uint16_t v) {
     p[1] = (uint8_t)((v >> 8) & 0xFF);
 }
 
+#if DS_CH9_DIAG
+#define DS_CH9_DIAG_SUMMARY_INTERVAL_MS 5000U
+#define DS_CH9_DIAG_EVENT_INTERVAL_MS   1000U
+
+typedef enum {
+    DS_DIAG_POLL_TX_FAIL = 0,
+    DS_DIAG_POLL_TXFRS_TIMEOUT,
+    DS_DIAG_RESP_TIMEOUT,
+    DS_DIAG_RESP_RX_ERROR,
+    DS_DIAG_RESP_AFFREJ,
+    DS_DIAG_BAD_RESP,
+    DS_DIAG_FINAL_TX_FAIL,
+    DS_DIAG_POLL_RX_TIMEOUT,
+    DS_DIAG_POLL_RX_ERROR,
+    DS_DIAG_POLL_AFFREJ,
+    DS_DIAG_POLL_FILTERED,
+    DS_DIAG_FINAL_TIMEOUT,
+    DS_DIAG_FINAL_RX_ERROR,
+    DS_DIAG_FINAL_AFFREJ,
+    DS_DIAG_FINAL_BAD_FRAME
+} ds_ch9_diag_reason_t;
+
+typedef struct {
+    uint32_t poll_tx_fail;
+    uint32_t poll_txfrs_timeout;
+    uint32_t resp_timeout;
+    uint32_t resp_rx_error;
+    uint32_t resp_affrej;
+    uint32_t bad_resp;
+    uint32_t final_tx_fail;
+    uint32_t last_event_ms;
+    uint32_t last_summary_ms;
+} ds_ch9_tag_diag_t;
+
+typedef struct {
+    uint32_t poll_rx_timeout;
+    uint32_t poll_rx_error;
+    uint32_t poll_affrej;
+    uint32_t poll_filtered;
+    uint32_t final_timeout;
+    uint32_t final_rx_error;
+    uint32_t final_affrej;
+    uint32_t final_bad_frame;
+    uint32_t last_event_ms;
+    uint32_t last_summary_ms;
+} ds_ch9_anc_diag_t;
+
+static ds_ch9_tag_diag_t g_ds_ch9_tag_diag;
+static ds_ch9_anc_diag_t g_ds_ch9_anc_diag;
+
+static const char *ds_ch9_diag_reason_name(ds_ch9_diag_reason_t reason)
+{
+    switch (reason) {
+    case DS_DIAG_POLL_TX_FAIL:       return "poll_tx_fail";
+    case DS_DIAG_POLL_TXFRS_TIMEOUT: return "poll_txfrs_timeout";
+    case DS_DIAG_RESP_TIMEOUT:       return "resp_timeout";
+    case DS_DIAG_RESP_RX_ERROR:      return "resp_rx_error";
+    case DS_DIAG_RESP_AFFREJ:        return "resp_affrej";
+    case DS_DIAG_BAD_RESP:           return "bad_resp";
+    case DS_DIAG_FINAL_TX_FAIL:      return "final_tx_fail";
+    case DS_DIAG_POLL_RX_TIMEOUT:    return "poll_rx_timeout";
+    case DS_DIAG_POLL_RX_ERROR:      return "poll_rx_error";
+    case DS_DIAG_POLL_AFFREJ:        return "poll_affrej";
+    case DS_DIAG_POLL_FILTERED:      return "poll_filtered";
+    case DS_DIAG_FINAL_TIMEOUT:      return "final_timeout";
+    case DS_DIAG_FINAL_RX_ERROR:     return "final_rx_error";
+    case DS_DIAG_FINAL_AFFREJ:       return "final_affrej";
+    case DS_DIAG_FINAL_BAD_FRAME:    return "final_bad_frame";
+    default:                         return "unknown";
+    }
+}
+
+static void ds_ch9_tag_diag_summary_maybe_print(void)
+{
+    const uint32_t now = HAL_GetTick();
+    if ((uint32_t)(now - g_ds_ch9_tag_diag.last_summary_ms) < DS_CH9_DIAG_SUMMARY_INTERVAL_MS) return;
+    g_ds_ch9_tag_diag.last_summary_ms = now;
+    printf("[TAG][DSDIAG][SUM] poll_tx=%lu poll_txfrs_to=%lu resp_to=%lu resp_err=%lu resp_affrej=%lu bad_resp=%lu final_tx=%lu\r\n",
+           (unsigned long)g_ds_ch9_tag_diag.poll_tx_fail,
+           (unsigned long)g_ds_ch9_tag_diag.poll_txfrs_timeout,
+           (unsigned long)g_ds_ch9_tag_diag.resp_timeout,
+           (unsigned long)g_ds_ch9_tag_diag.resp_rx_error,
+           (unsigned long)g_ds_ch9_tag_diag.resp_affrej,
+           (unsigned long)g_ds_ch9_tag_diag.bad_resp,
+           (unsigned long)g_ds_ch9_tag_diag.final_tx_fail);
+}
+
+static void ds_ch9_anc_diag_summary_maybe_print(void)
+{
+    const uint32_t now = HAL_GetTick();
+    if ((uint32_t)(now - g_ds_ch9_anc_diag.last_summary_ms) < DS_CH9_DIAG_SUMMARY_INTERVAL_MS) return;
+    g_ds_ch9_anc_diag.last_summary_ms = now;
+    printf("[ANC][DSDIAG][SUM] poll_to=%lu poll_err=%lu poll_affrej=%lu poll_filt=%lu final_to=%lu final_err=%lu final_affrej=%lu final_bad=%lu\r\n",
+           (unsigned long)g_ds_ch9_anc_diag.poll_rx_timeout,
+           (unsigned long)g_ds_ch9_anc_diag.poll_rx_error,
+           (unsigned long)g_ds_ch9_anc_diag.poll_affrej,
+           (unsigned long)g_ds_ch9_anc_diag.poll_filtered,
+           (unsigned long)g_ds_ch9_anc_diag.final_timeout,
+           (unsigned long)g_ds_ch9_anc_diag.final_rx_error,
+           (unsigned long)g_ds_ch9_anc_diag.final_affrej,
+           (unsigned long)g_ds_ch9_anc_diag.final_bad_frame);
+}
+
+static void ds_ch9_tag_diag_record(uint16_t aid, uint8_t sn, const char *stage,
+                                   ds_ch9_diag_reason_t reason, uint32_t status)
+{
+    const uint32_t now = HAL_GetTick();
+    switch (reason) {
+    case DS_DIAG_POLL_TX_FAIL:       g_ds_ch9_tag_diag.poll_tx_fail++; break;
+    case DS_DIAG_POLL_TXFRS_TIMEOUT: g_ds_ch9_tag_diag.poll_txfrs_timeout++; break;
+    case DS_DIAG_RESP_TIMEOUT:       g_ds_ch9_tag_diag.resp_timeout++; break;
+    case DS_DIAG_RESP_RX_ERROR:      g_ds_ch9_tag_diag.resp_rx_error++; break;
+    case DS_DIAG_RESP_AFFREJ:        g_ds_ch9_tag_diag.resp_affrej++; break;
+    case DS_DIAG_BAD_RESP:           g_ds_ch9_tag_diag.bad_resp++; break;
+    case DS_DIAG_FINAL_TX_FAIL:      g_ds_ch9_tag_diag.final_tx_fail++; break;
+    default: break;
+    }
+    if ((g_ds_ch9_tag_diag.last_event_ms == 0U) ||
+        ((uint32_t)(now - g_ds_ch9_tag_diag.last_event_ms) >= DS_CH9_DIAG_EVENT_INTERVAL_MS)) {
+        g_ds_ch9_tag_diag.last_event_ms = now;
+        printf("[TAG][DSDIAG] stage=%s reason=%s status=0x%08lX SN=%u addr=0x%04X\r\n",
+               stage, ds_ch9_diag_reason_name(reason), (unsigned long)status,
+               (unsigned int)sn, (unsigned int)aid);
+    }
+    ds_ch9_tag_diag_summary_maybe_print();
+}
+
+static void ds_ch9_anc_diag_record(uint16_t peer_addr, uint8_t sn, const char *stage,
+                                   ds_ch9_diag_reason_t reason, uint32_t status)
+{
+    const uint32_t now = HAL_GetTick();
+    switch (reason) {
+    case DS_DIAG_POLL_RX_TIMEOUT: g_ds_ch9_anc_diag.poll_rx_timeout++; break;
+    case DS_DIAG_POLL_RX_ERROR:   g_ds_ch9_anc_diag.poll_rx_error++; break;
+    case DS_DIAG_POLL_AFFREJ:     g_ds_ch9_anc_diag.poll_affrej++; break;
+    case DS_DIAG_POLL_FILTERED:   g_ds_ch9_anc_diag.poll_filtered++; break;
+    case DS_DIAG_FINAL_TIMEOUT:   g_ds_ch9_anc_diag.final_timeout++; break;
+    case DS_DIAG_FINAL_RX_ERROR:  g_ds_ch9_anc_diag.final_rx_error++; break;
+    case DS_DIAG_FINAL_AFFREJ:    g_ds_ch9_anc_diag.final_affrej++; break;
+    case DS_DIAG_FINAL_BAD_FRAME: g_ds_ch9_anc_diag.final_bad_frame++; break;
+    default: break;
+    }
+    if ((g_ds_ch9_anc_diag.last_event_ms == 0U) ||
+        ((uint32_t)(now - g_ds_ch9_anc_diag.last_event_ms) >= DS_CH9_DIAG_EVENT_INTERVAL_MS)) {
+        g_ds_ch9_anc_diag.last_event_ms = now;
+        printf("[ANC][DSDIAG] stage=%s reason=%s status=0x%08lX SN=%u addr=0x%04X peer=0x%04X\r\n",
+               stage, ds_ch9_diag_reason_name(reason), (unsigned long)status,
+               (unsigned int)sn, (unsigned int)g_sys_cfg.short_addr, (unsigned int)peer_addr);
+    }
+    ds_ch9_anc_diag_summary_maybe_print();
+}
+#endif
+
 static const char* tag_fail_cat_from_status(uint32_t st) {
     if ((st & SYS_STATUS_RXFCG_BIT_MASK) != 0U) return "rx_seen_unhandled";
     if ((st & SYS_STATUS_ARFE_BIT_MASK) != 0U)  return "rx_err_arfe";
@@ -2514,6 +2668,9 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
              (unsigned long)st_now);
 #endif
 #endif
+#if DS_CH9_DIAG
+        ds_ch9_tag_diag_record(dst_short, this_sn, "POLL_TX", DS_DIAG_POLL_TX_FAIL, st_now);
+#endif
         tag_log_fail_cat(dst_short, this_sn, "tx_start", 0U, st_now, 0U, 0U, 0U, 0U, 0U, 0U);
         return false;
     }
@@ -2545,6 +2702,10 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
 
         // safety timeout to avoid deadlock (e.g. 2ms)
         if ((micros() - tx_wait_start) > 2000U) {
+#if DS_CH9_DIAG
+          ds_ch9_tag_diag_record(dst_short, this_sn, "POLL_TX", DS_DIAG_POLL_TXFRS_TIMEOUT,
+                                 dwt_read32bitreg(SYS_STATUS_ID));
+#endif
           return false;
         }
       }
@@ -2572,6 +2733,9 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
              (unsigned int)this_sn,
              (unsigned long)st_now);
 #endif
+#endif
+#if DS_CH9_DIAG
+        ds_ch9_tag_diag_record(dst_short, this_sn, "POLL_TX", DS_DIAG_POLL_TXFRS_TIMEOUT, st_now);
 #endif
         tag_log_fail_cat(dst_short, this_sn, "txfrs_timeout", 0U, st_now, 0U, 0U, 0U, 0U, 0U, 0U);
         return false;
@@ -2601,6 +2765,15 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
             dwt_write32bitreg(SYS_STATUS_ID,
                 SYS_STATUS_ALL_RX_ERR | SYS_STATUS_ALL_RX_TO |
                 SYS_STATUS_RXFCG_BIT_MASK | SYS_STATUS_TXFRS_BIT_MASK);
+#if DS_CH9_DIAG
+            if ((st_now & SYS_STATUS_AFFREJ_BIT_MASK) != 0U) {
+                ds_ch9_tag_diag_record(dst_short, this_sn, "RESP_RX", DS_DIAG_RESP_AFFREJ, st_now);
+            } else if ((st_now & SYS_STATUS_ALL_RX_ERR) != 0U) {
+                ds_ch9_tag_diag_record(dst_short, this_sn, "RESP_RX", DS_DIAG_RESP_RX_ERROR, st_now);
+            } else {
+                ds_ch9_tag_diag_record(dst_short, this_sn, "RESP_RX", DS_DIAG_RESP_TIMEOUT, st_now);
+            }
+#endif
             tag_log_fail_cat(dst_short, this_sn, tag_fail_cat_from_status(st_now),
                              1U, st_now, last_flen, (uint32_t)(micros() - t_start),
                              first_rx_st, last_rx_st, rx_state0, rx_state1);
@@ -2664,6 +2837,9 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
                     uint32_t rx_state1 = dwt_read32bitreg(SYS_STATE_LO_ID);
                     dwt_forcetrxoff();
                     dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_ERR | SYS_STATUS_ALL_RX_TO);
+#if DS_CH9_DIAG
+                    ds_ch9_tag_diag_record(dst_short, this_sn, "RESP_RX", DS_DIAG_BAD_RESP, st);
+#endif
                     tag_log_fail_cat(dst_short, this_sn, "bad_len", 1U, st, flen, elapsed,
                                      first_rx_st, last_rx_st, rx_state0, rx_state1);
                     return false;
@@ -2706,6 +2882,9 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
                     uint32_t rx_state1 = dwt_read32bitreg(SYS_STATE_LO_ID);
                     dwt_forcetrxoff();
                     dwt_write32bitreg(SYS_STATUS_ID, SYS_STATUS_RXFCG_BIT_MASK | SYS_STATUS_ALL_RX_ERR | SYS_STATUS_ALL_RX_TO);
+#if DS_CH9_DIAG
+                    ds_ch9_tag_diag_record(dst_short, this_sn, "RESP_RX", DS_DIAG_BAD_RESP, st);
+#endif
                     tag_log_fail_cat(dst_short, this_sn, "bad_resp", 1U, st, flen, elapsed,
                                      first_rx_st, last_rx_st, rx_state0, rx_state1);
                     return false;
@@ -2755,6 +2934,10 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
                 dwt_writetxfctrl(sizeof(tx_final_msg) + 2, 0, 1);
 
                 if (dwt_starttx(DWT_START_TX_DELAYED) != DWT_SUCCESS) {
+#if DS_CH9_DIAG
+                    uint32_t st_now = dwt_read32bitreg(SYS_STATUS_ID);
+                    ds_ch9_tag_diag_record(dst_short, this_sn, "FINAL_TX", DS_DIAG_FINAL_TX_FAIL, st_now);
+#endif
                     dwt_forcetrxoff();
                     return false;
                 }
@@ -2989,33 +3172,32 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
                 if (warn_rssi_low) { twr_reason_add(reason_str, sizeof(reason_str), "rssi_low"); }
             }
 
-#if (UWB_RF_CHANNEL == 9)
-            /* CH9: diagnostics corruption and physically invalid ranges remain
+            /* Diagnostics corruption and physically invalid ranges remain
              * hard rejects. FP/SNR/MP failures are measurement candidates and
              * therefore update the TAG-side diagnostic filter at a useful
              * minimum weight instead of being held indefinitely. */
-            const bool ch9_original_quality_ok = quality_ok;
-            const float ch9_raw_mm = (float)(dist * 1000.0);
-            const bool ch9_distance_invalid =
-                (!isfinite(ch9_raw_mm)) ||
-                (ch9_raw_mm <= 0.0f) ||
-                (ch9_raw_mm > (float)UWB_DISTANCE_LPF_MAX_MM);
-            const bool ch9_hard_reject = fail_diag || ch9_distance_invalid;
-            const bool ch9_weight_warning =
+            const bool original_quality_ok = quality_ok;
+            const float raw_mm = (float)(dist * 1000.0);
+            const bool distance_invalid =
+                (!isfinite(raw_mm)) ||
+                (raw_mm <= 0.0f) ||
+                (raw_mm > (float)UWB_DISTANCE_LPF_MAX_MM);
+            const bool hard_reject = fail_diag || distance_invalid;
+            const bool weight_warning =
                 (qw_reason != NULL) && (strcmp(qw_reason, "ok") != 0);
-            bool ch9_soft_accept = false;
+            bool soft_accept = false;
 
-            if (ch9_distance_invalid) {
+            if (distance_invalid) {
                 twr_reason_add(reason_str, sizeof(reason_str), "invalid_distance");
             }
-            if (ch9_weight_warning) {
+            if (weight_warning) {
                 twr_reason_add(reason_str, sizeof(reason_str), qw_reason);
             }
 
-            if (ch9_hard_reject) {
+            if (hard_reject) {
                 quality_ok = false;
-            } else if ((!quality_ok) || warn_rssi_low || ch9_weight_warning) {
-                ch9_soft_accept = true;
+            } else if ((!quality_ok) || warn_rssi_low || weight_warning) {
+                soft_accept = true;
                 quality_ok = true;
                 if (q_weight < 35U) {
                     q_weight = 35U;
@@ -3024,17 +3206,16 @@ static bool poll_one_aid(uint16_t dst_short, float *out_m) {
 
 #if UWB_CH9_FILTER_DEBUG
             uwb_ch9_quality_debug_log(
-                uwb_round_mm(ch9_raw_mm),
-                ch9_original_quality_ok,
+                uwb_round_mm(raw_mm),
+                original_quality_ok,
                 reason_str,
-                ch9_hard_reject ? "hard_reject" :
-                    (ch9_soft_accept ? "soft_accept" : "normal"),
-                ch9_soft_accept ? "35+" : "native",
+                hard_reject ? "hard_reject" :
+                    (soft_accept ? "soft_accept" : "normal"),
+                soft_accept ? "35+" : "native",
                 -1L);
 #endif
-            (void)ch9_original_quality_ok;
-            (void)ch9_soft_accept;
-#endif
+            (void)original_quality_ok;
+            (void)soft_accept;
 
             const char* quality_fail_reason = NULL;
             if (!quality_ok) {
@@ -3416,8 +3597,8 @@ void tag_main(void) {
         }
 #endif
 
-#if !DS_BOUNDED_SCHEDULER && (UWB_RF_CHANNEL == 9)
-        /* 3rd pass: CH9 robot shielding recovery
+#if !DS_BOUNDED_SCHEDULER
+        /* 3rd pass: robot shielding recovery
          * Robot body blocks LOS during rotation; a second retry
          * covers the ~100-200ms window until the antenna clears. */
         for (uint8_t i = 0; i < n; i++) {
@@ -3833,6 +4014,11 @@ void anchor_main()
 
             if (is_affrej) { 
                 g_anc_stat.rx_affrej++; 
+#if DS_CH9_DIAG
+                if (g_sys_cfg.ranging_mode == UWB_RANGING_MODE_DS) {
+                    ds_ch9_anc_diag_record(0xFFFFU, 0xFFU, "POLL_RX", DS_DIAG_POLL_AFFREJ, status);
+                }
+#endif
 #if DS_ANCHOR_OBS_SUMMARY
                 g_anc_obs_summary.affrej_count++;
 #endif
@@ -3889,6 +4075,11 @@ void anchor_main()
             }
             if (is_to)     { 
                 g_anc_stat.rx_to++;     
+#if DS_CH9_DIAG
+                if (g_sys_cfg.ranging_mode == UWB_RANGING_MODE_DS) {
+                    ds_ch9_anc_diag_record(0xFFFFU, 0xFFU, "POLL_RX", DS_DIAG_POLL_RX_TIMEOUT, status);
+                }
+#endif
 #if DS_ANCHOR_OBS_SUMMARY
                 g_anc_obs_summary.rx_to_count++;
 #endif
@@ -3897,6 +4088,11 @@ void anchor_main()
             }
             if ((!is_affrej) && (!is_to) && is_err) { 
                 g_anc_stat.rx_err++; 
+#if DS_CH9_DIAG
+                if (g_sys_cfg.ranging_mode == UWB_RANGING_MODE_DS) {
+                    ds_ch9_anc_diag_record(0xFFFFU, 0xFFU, "POLL_RX", DS_DIAG_POLL_RX_ERROR, status);
+                }
+#endif
 #if DS_ANCHOR_OBS_SUMMARY
                 g_anc_obs_summary.rx_err_count++;
 #endif
@@ -3991,6 +4187,11 @@ void anchor_main()
         if (!pan_match || !addr_match) {
             if (!pan_match)  { g_anc_stat.rx_fcg_bad_pan++; }
             if (!addr_match) { g_anc_stat.rx_fcg_bad_dst++; }
+#if DS_CH9_DIAG
+            if (g_sys_cfg.ranging_mode == UWB_RANGING_MODE_DS) {
+                ds_ch9_anc_diag_record(poll_src_addr, sn_rx, "POLL_RX", DS_DIAG_POLL_FILTERED, status);
+            }
+#endif
 #if DS_ANCHOR_OBS_SUMMARY
             g_anc_obs_summary.rejected_nonmatching_poll_count++;
 #endif
@@ -4148,6 +4349,18 @@ void anchor_main()
                 }
 #endif
                 /* FINAL not received — diagnose reason */
+#if DS_CH9_DIAG
+                if ((st_final & SYS_STATUS_AFFREJ_BIT_MASK) != 0U) {
+                    ds_ch9_anc_diag_record(poll_src_addr, rx_buf[ALL_MSG_SN_IDX], "FINAL_RX",
+                                           DS_DIAG_FINAL_AFFREJ, st_final);
+                } else if ((st_final & SYS_STATUS_ALL_RX_ERR) != 0U) {
+                    ds_ch9_anc_diag_record(poll_src_addr, rx_buf[ALL_MSG_SN_IDX], "FINAL_RX",
+                                           DS_DIAG_FINAL_RX_ERROR, st_final);
+                } else {
+                    ds_ch9_anc_diag_record(poll_src_addr, rx_buf[ALL_MSG_SN_IDX], "FINAL_RX",
+                                           DS_DIAG_FINAL_TIMEOUT, st_final);
+                }
+#endif
 #if defined(DS_TWR_VERBOSE) && DS_TWR_VERBOSE
                 if (st_final & SYS_STATUS_AFFREJ_BIT_MASK) {
                     dbg_final_affrej_burst++;
@@ -4172,6 +4385,10 @@ void anchor_main()
             /* Read and validate FINAL frame */
             uint32_t final_flen = dwt_read32bitreg(RX_FINFO_ID) & RXFLEN_MASK;
             if (final_flen > sizeof(rx_buf) || final_flen < FINAL_MSG_MIN_LEN) {
+#if DS_CH9_DIAG
+                ds_ch9_anc_diag_record(poll_src_addr, rx_buf[ALL_MSG_SN_IDX], "FINAL_RX",
+                                       DS_DIAG_FINAL_BAD_FRAME, st_final);
+#endif
 #if DS_ANCHOR_OBS_SUMMARY
                 g_anc_obs_summary.final_rx_bad_len_count++;
 #endif
@@ -4199,6 +4416,10 @@ void anchor_main()
             bool final_src_ok  = (final_src_addr == poll_src_addr);
 
             if (!final_fc_ok || !final_type_ok || !final_sn_ok || !final_pan_ok || !final_dst_ok || !final_src_ok) {
+#if DS_CH9_DIAG
+                ds_ch9_anc_diag_record(final_src_addr, final_buf[ALL_MSG_SN_IDX], "FINAL_RX",
+                                       DS_DIAG_FINAL_BAD_FRAME, st_final);
+#endif
 #if DS_ANCHOR_OBS_SUMMARY
                 g_anc_obs_summary.final_rx_mismatch_count++;
 #endif
@@ -4222,7 +4443,6 @@ void anchor_main()
             twr_quality_t anc_q = twr_quality_from_diag(&diag);
             bool anc_diag_ok = twr_diag_is_sane(&diag);
             if (!anc_diag_ok) {
-#if (UWB_RF_CHANNEL == 9)
                 uint32_t diag_now_ms = HAL_GetTick();
                 int8_t diag_slot = twr_anchor_slot_from_id(g_sys_cfg.short_addr);
                 uint8_t diag_idx = (diag_slot >= 0) ? (uint8_t)diag_slot : 0U;
@@ -4243,13 +4463,13 @@ void anchor_main()
                     g_anc_last_valid_tick_ms[diag_idx]);
                 bool within_count =
                     (g_anc_diag_insane_count[diag_idx] <
-                     UWB_CH9_DIAG_INSANE_MAX_COUNT);
+                     UWB_DIAG_INSANE_MAX_COUNT);
                 bool within_time =
-                    (diag_elapsed_ms < UWB_CH9_DIAG_INSANE_HOLD_MS);
+                    (diag_elapsed_ms < UWB_DIAG_INSANE_HOLD_MS);
                 bool have_recent_valid =
                     (g_anc_last_valid_dist_mm[diag_idx] > 100L) &&
                     (g_anc_last_valid_tick_ms[diag_idx] != 0U) &&
-                    (last_valid_age_ms <= UWB_CH9_DIAG_INSANE_HOLD_MS);
+                    (last_valid_age_ms <= UWB_DIAG_INSANE_HOLD_MS);
 
 #if UWB_CH9_FILTER_DEBUG
                 uwb_ch9_diag_insane_debug_log(
@@ -4272,7 +4492,6 @@ void anchor_main()
 #if UWB_CH9_FILTER_DEBUG
                 uwb_ch9_quality_debug_log(
                     -1L, false, "diag_insane", "hard_reject", "n/a", -1L);
-#endif
 #endif
                 uwb_can_send_anchor_comm_lost_mm(g_sys_cfg.short_addr, "diag_insane");
                 dwt_forcetrxoff();
@@ -4325,13 +4544,9 @@ void anchor_main()
             uint8_t anc_idx = (anc_slot >= 0) ? (uint8_t)anc_slot : 0U;
             if (anc_idx >= NUM_OF_ANCHORS) anc_idx = 0U;
 
-#if (UWB_RF_CHANNEL == 9)
             if (isfinite(ds_dist) &&
                 (ds_dist > 0.0) &&
                 (ds_dist <= ((double)UWB_DISTANCE_LPF_MAX_MM / 1000.0))) {
-#else
-            if (ds_dist > 0.0) {
-#endif
                 double d_mm = ds_dist * 1000.0;
                 if (d_mm > 2147483647.0) d_mm = 2147483647.0;
 
@@ -4352,17 +4567,16 @@ void anchor_main()
                 if (los_conf < 0.0f) los_conf = 0.0f;
                 if (los_conf > 1.0f) los_conf = 1.0f;
 
-#if (UWB_RF_CHANNEL == 9)
-                /* A sane CH9 frame is never rejected solely for weak/NLOS
+                /* A sane frame is never rejected solely for weak/NLOS
                  * diagnostics. Keep it as a Kalman candidate with a bounded
                  * confidence floor; LPF MAX_STEP owns output stability. */
-                const bool ch9_anchor_soft_accept =
+                const bool anchor_soft_accept =
                     (anc_q.nlos_score > 0U) ||
                     (anc_q.mp_score < TWR_QUAL_MIN_MP) ||
                     (anc_q.snr_score < TWR_QUAL_MIN_SNR) ||
                     (anc_q.rssi_score < TWR_QUAL_WARN_RSSI);
 
-                if (ch9_anchor_soft_accept && (los_conf < 0.45f)) {
+                if (anchor_soft_accept && (los_conf < 0.45f)) {
                     los_conf = 0.45f;
                 }
 
@@ -4383,12 +4597,11 @@ void anchor_main()
                 }
                 uwb_ch9_quality_debug_log(
                     raw_input_mm,
-                    !ch9_anchor_soft_accept,
+                    !anchor_soft_accept,
                     ch9_reason,
-                    ch9_anchor_soft_accept ? "soft_accept" : "normal",
+                    anchor_soft_accept ? "soft_accept" : "normal",
                     "n/a",
                     (long)(los_conf * 100.0f));
-#endif
 #endif
 
                 /* CH9 uses a conservative fixed base; measurement delta still
@@ -4499,10 +4712,8 @@ void anchor_main()
 
                         g_anc_last_valid_dist_mm[anc_idx] = can_dist_mm;
                         g_anc_last_valid_tick_ms[anc_idx] = HAL_GetTick();
-#if (UWB_RF_CHANNEL == 9)
                         g_anc_diag_insane_count[anc_idx] = 0U;
                         g_anc_diag_insane_first_tick_ms[anc_idx] = 0U;
-#endif
 
                         uint16_t final_src = get_u16_le(&final_buf[FINAL_SRC_ADDR_IDX]);
                         printf("[ANC][DS][DIST] AID=0x%04X src=0x%04X"
@@ -4522,7 +4733,7 @@ void anchor_main()
                     }
                 }
             } else {
-#if (UWB_RF_CHANNEL == 9) && UWB_CH9_FILTER_DEBUG
+#if UWB_CH9_FILTER_DEBUG
                 uwb_ch9_quality_debug_log(
                     -1L, false, "invalid_distance", "hard_reject", "n/a", -1L);
 #endif

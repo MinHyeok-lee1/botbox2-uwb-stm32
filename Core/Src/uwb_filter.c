@@ -156,11 +156,12 @@ void uwb_distance_lpf_reset(uwb_distance_lpf_t *f)
     memset(f, 0, sizeof(*f));
     f->base_alpha_permille = UWB_DISTANCE_LPF_BASE_ALPHA_PERMILLE;
 
-#if defined(UWB_RF_CHANNEL) && (UWB_RF_CHANNEL == 9) && UWB_CH9_FILTER_DEBUG
+#if defined(UWB_RF_CHANNEL) && UWB_CH9_FILTER_DEBUG
     static uint8_t profile_logged = 0U;
     if (profile_logged == 0U) {
         profile_logged = 1U;
-        printf("[UWB][FILTER][CH9][5HZ_MP_TOL] rate=5Hz slot=55 guard=6500 max_step=%ld spike=%ld jump=%ld stable=%ld resync=%ld alpha_base=%ld alpha_min=%ld alpha_max=%ld kf_q_dist=%ld kf_q_vel=%ld kf_r=%ld nlos_scale=%ld gate=%ld kf_damp_x100=%ld kf_max_vel=%ld\r\n",
+        printf("[UWB][FILTER][CH%d] max_step=%ld spike=%ld jump=%ld stable=%ld resync=%ld alpha_base=%ld alpha_min=%ld alpha_max=%ld kf_q_dist=%ld kf_q_vel=%ld kf_r=%ld nlos_scale=%ld gate=%ld kf_damp_x100=%ld kf_max_vel=%ld\r\n",
+               (int)UWB_RF_CHANNEL,
                (long)UWB_ANC_LPF_MAX_STEP_MM,
                (long)UWB_ANC_LPF_SPIKE_THRESHOLD_MM,
                (long)UWB_ANC_LPF_JUMP_THRESHOLD_MM,
