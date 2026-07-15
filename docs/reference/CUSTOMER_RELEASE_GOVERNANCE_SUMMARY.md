@@ -6,6 +6,7 @@ This customer release is exported from the finalized Product runtime acceptance 
 
 - Product source commit: `5465025 fix(product): restore slow-listen entry visibility`
 - Customer export commit: `3cda0a4 chore(customer): export slow-listen entry visibility`
+- 2026-07-15 refresh: CH9 DW3000 recovery fixes are included in the sanitized Customer delivery snapshot. Detailed Product validation records remain in 02 Product.
 - Slow-listen accepted window: `ANCHOR_LP_WAKE_INTERVAL_MS=2500U`, `ANCHOR_LP_LISTEN_WINDOW_MS=250U`
 - Slow-listen entry logs:
   - `[ANC][PWR] enter low-power listen: no matched poll for 60000 ms`

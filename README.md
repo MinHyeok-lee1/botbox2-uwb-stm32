@@ -32,6 +32,7 @@ This Customer repository contains the sanitized delivery source and release asse
 - This repo is the sanitized Customer delivery snapshot exported from 02 Product.
 - Product acceptance evidence and internal analysis stay in 02 Product, not in this Customer repository.
 - Customer release source: clean export from 02 Product.
+- 2026-07-15 delivery status: CH9 DW3000 recovery fixes have been propagated into this Customer delivery snapshot as sanitized runtime source and release assets. Detailed Product validation records remain in 02 Product.
 
 ### Release Firmware Assets
 
@@ -89,7 +90,7 @@ Runtime role, PAN ID, short address, and anchor topology are still controlled by
 2. **cfg.bin:** 런타임에 보드의 역할(TAG/ANCHOR), ID 및 레인징 파라미터를 결정하는 소형(40바이트) 설정 파일.
 
 ---
-*최종 업데이트: 2026-06-29*
+*최종 업데이트: 2026-07-15*
 *
 
 ### CH9 5Hz Multipath-Tolerant Conservative Profile
