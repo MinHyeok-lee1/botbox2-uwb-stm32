@@ -150,7 +150,19 @@
 #ifndef DS_CH9_DIAG
 #define DS_CH9_DIAG 0
 #endif
- 
+
+#if (UWB_RF_CHANNEL == 9)
+#ifndef UWB_DW3000_RESET_RELEASE_DELAY_MS
+#define UWB_DW3000_RESET_RELEASE_DELAY_MS 5U
+#endif
+
+#ifndef UWB_DW3000_RESET_RELEASE_FLOAT
+#define UWB_DW3000_RESET_RELEASE_FLOAT 0
+#endif
+#endif
+
+#define UWB_DWT_CONFIGURE_MAX_ATTEMPTS 3U
+
 typedef enum {
     ANCHOR_STATE_ACTIVE = 0,
     ANCHOR_STATE_LINK_LOST,
@@ -1488,13 +1500,50 @@ static void dw3000_cs_idle_high(void)
     HAL_GPIO_WritePin(DW3000_CS_PORT, DW3000_CS_PIN, GPIO_PIN_SET);
 }
 
+#if (UWB_RF_CHANNEL == 9)
+static void dw3000_reset_drive_low(void)
+{
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    GPIO_InitStruct.Pin = DW3000_RST_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(DW3000_RST_PORT, &GPIO_InitStruct);
+    HAL_GPIO_WritePin(DW3000_RST_PORT, DW3000_RST_PIN, GPIO_PIN_RESET);
+}
+
+static void dw3000_reset_release(void)
+{
+#if UWB_DW3000_RESET_RELEASE_FLOAT
+    GPIO_InitTypeDef GPIO_InitStruct = {0};
+
+    GPIO_InitStruct.Pin = DW3000_RST_PIN;
+    GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(DW3000_RST_PORT, &GPIO_InitStruct);
+#else
+    HAL_GPIO_WritePin(DW3000_RST_PORT, DW3000_RST_PIN, GPIO_PIN_SET);
+#endif
+}
+#endif
+
 static void dw3000_reset_pulse(void)
 {
+#if (UWB_RF_CHANNEL == 9)
+    dw3000_reset_drive_low();
+    HAL_Delay(2);
+
+    dw3000_reset_release();
+    HAL_Delay(UWB_DW3000_RESET_RELEASE_DELAY_MS);
+#else
     HAL_GPIO_WritePin(DW3000_RST_PORT, DW3000_RST_PIN, GPIO_PIN_RESET);
     HAL_Delay(2);
 
     HAL_GPIO_WritePin(DW3000_RST_PORT, DW3000_RST_PIN, GPIO_PIN_SET);
     HAL_Delay(5);
+#endif
 }
 
 static void dw3000_spi_wake_pulse(void)
@@ -1737,7 +1786,35 @@ uwb_error_codes uwb_lib_cfg(dwt_config_t* config)
         config = &default_config;
     }
 
-    if (dwt_configure(config)) {
+    int cfg_ret = DWT_ERROR;
+    for (uint32_t attempt = 0U; attempt < UWB_DWT_CONFIGURE_MAX_ATTEMPTS; attempt++) {
+        cfg_ret = dwt_configure(config);
+#if DS_CH9_DIAG && (UWB_RF_CHANNEL == 9)
+        if (attempt == 0U) {
+            uint32_t status = dwt_read32bitreg(SYS_STATUS_ID);
+            uint32_t cp_lock = (status & SYS_STATUS_CP_LOCK_BIT_MASK) ? 1UL : 0UL;
+            printf("[UWB][CFGFIRST] ret=%ld status=0x%08lX cp_lock=%lu reset_delay_ms=%lu reset_float=%lu\r\n",
+                   (long)cfg_ret,
+                   (unsigned long)status,
+                   (unsigned long)cp_lock,
+                   (unsigned long)UWB_DW3000_RESET_RELEASE_DELAY_MS,
+                   (unsigned long)UWB_DW3000_RESET_RELEASE_FLOAT);
+        }
+#endif
+        if (cfg_ret == DWT_SUCCESS) {
+            if (attempt > 0U) {
+                printf("[UWB][CFG] dwt_configure recovered attempt=%lu\r\n",
+                       (unsigned long)(attempt + 1U));
+            }
+            break;
+        }
+
+        printf("[UWB][CFG] dwt_configure failed attempt=%lu ret=%ld\r\n",
+               (unsigned long)(attempt + 1U),
+               (long)cfg_ret);
+    }
+
+    if (cfg_ret != DWT_SUCCESS) {
         return UWB_ERROR_INIT;
     }
 
