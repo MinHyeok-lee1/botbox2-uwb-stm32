@@ -1,37 +1,37 @@
 # STM32 DW3000 IOC-Shell (현재 상태: 통합 완료)
 
 > [!IMPORTANT]
-> **Start here — 02 Product**
-> - 역할: CAN, 버튼, standby/wake 및 전원 관리를 포함한 제품 보드 통합 저장소입니다.
-> - 금지: Product 전용 기능을 01 EVB로 역류시키거나 EVB 변경을 검증 없이 통합하지 마십시오.
-> - 제품 반영은 승인된 EVB→Product 흐름과 수동 적응 원칙을 따릅니다.
+> **Start here — Customer Delivery**
+> - 역할: 02 Product에서 정화 export된 Customer delivery 저장소입니다.
+> - 금지: Product acceptance evidence, 내부 분석 문서, 로컬 개발 메타데이터를 이 Customer 저장소로 옮기지 마십시오.
+> - Product runtime 변경과 acceptance evidence는 02 Product 저장소에서 소유하며, 이 저장소는 전달 가능한 산출물만 유지합니다.
 > - 먼저 [AGENTS.md](AGENTS.md), 이어서 [docs/COMMAND_INDEX.md](docs/COMMAND_INDEX.md)를 읽으십시오.
-> - 제품 시작 절차는 [docs/PRODUCT_QUICK_START.md](docs/PRODUCT_QUICK_START.md), 공유 하네스는 [../HARNESS.md](../HARNESS.md)를 참고하십시오.
+> - Customer 사용자는 [docs/PRODUCT_QUICK_START.md](docs/PRODUCT_QUICK_START.md)와 이 저장소의 전달 문서만 참고하십시오.
 
 ## Documentation Entry
 
-Start here for the 02 Product runtime/release repo:
+Start here for the Customer delivery repository:
 
 - Repository guidance: see `docs/COMMAND_INDEX.md` and `docs/OPERATOR_QUICK_COMMANDS.md` for onboarding.
 - Command index: `docs/COMMAND_INDEX.md`.
 - Operator workflow: `docs/OPERATOR_QUICK_COMMANDS.md`.
-- Product overview and setup: `docs/PRODUCT_OVERVIEW.md`, then `docs/PRODUCT_QUICK_START.md`.
+- Product overview and setup for Customer delivery: `docs/PRODUCT_OVERVIEW.md`, then `docs/PRODUCT_QUICK_START.md`.
 - CAN contract: `docs/PRODUCT_CAN_INTERFACE.md` and `docs/contracts/UWB_CAN_PACKET_CONTRACT.md`.
 
-Product release gate:
+Customer delivery checks:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\tools\uwb_ops.ps1 gate -Repo product
+powershell -ExecutionPolicy Bypass -File .\tools\check_delivery.ps1
 ```
 
-This repo owns Product runtime, Product board integration, release acceptance, and Product-to-Customer export source. Product acceptance evidence stays here, not in Customer.
+This Customer repository contains the sanitized delivery source and release assets exported from 02 Product. Product acceptance evidence stays in 02 Product, not in this Customer repository.
 
 ## Current Release Status
 
 - Current Product baseline: `v1.0.0-product-accepted`
-- This repo is the Product runtime, board integration, release acceptance, and Product-to-Customer export source.
-- Product acceptance evidence stays in this repo, not in Customer.
-- Customer release source: clean export from this Product repo.
+- This repo is the sanitized Customer delivery snapshot exported from 02 Product.
+- Product acceptance evidence and internal analysis stay in 02 Product, not in this Customer repository.
+- Customer release source: clean export from 02 Product.
 
 ### Release Firmware Assets
 
