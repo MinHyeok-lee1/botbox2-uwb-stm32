@@ -3565,7 +3565,9 @@ void tag_main(void) {
 
         bool  ok[8];
         float dist_m[8];
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
         bool standby_latch_seen = false;
+#endif
 
         for (uint8_t i = 0; i < n; i++) {
             ok[i]     = false;
@@ -3650,9 +3652,11 @@ void tag_main(void) {
                 
             } while (true);
 
+#if (PRODUCT_LOW_POWER_MODE != PRODUCT_LOW_POWER_MODE_NONE)
             if (standby_latch_seen) {
                 break;
             }
+#endif
         }
 #else
         /* 1st pass: Poll all anchors defined in runtime config */
