@@ -94,8 +94,34 @@ function Test-MarkdownBodyContent {
     }
 }
 
+function Test-CriticalFixParity {
+    $workspaceRoot = Split-Path -Parent $repo
+    $parityScript = Join-Path $workspaceRoot 'tools\check_critical_fix_parity.ps1'
+    $productRepo = Join-Path $workspaceRoot '02_stm32-dw3000-g474re'
+
+    if (-not (Test-Path -LiteralPath $parityScript -PathType Leaf)) {
+        Write-Result WARN "Critical-fix parity checker not found; skipping 02->03 parity scan ($parityScript)."
+        return
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $productRepo 'Core\Src\main.c') -PathType Leaf)) {
+        Write-Result WARN "02 Product repository not found; skipping 02->03 parity scan ($productRepo)."
+        return
+    }
+
+    $output = @(& powershell -NoProfile -ExecutionPolicy Bypass -File $parityScript -ProductRepo $productRepo -CustomerRepo $repo 2>&1)
+    if ($LASTEXITCODE -eq 0) {
+        Write-Result PASS 'Critical-fix parity check passes for 02 Product -> 03 Customer.'
+    } else {
+        Write-Result FAIL 'Critical-fix parity check failed for 02 Product -> 03 Customer.'
+        foreach ($line in $output) {
+            Write-Host "       $line"
+        }
+    }
+}
+
 Write-Host '=== 03 Customer lightweight boundary scan ==='
 Test-MarkdownBodyContent
+Test-CriticalFixParity
 $items = @(Get-ChildItem -LiteralPath $repo -Recurse -Force -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notmatch '[\\/]\.git(?:[\\/]|$)' })
 $antigravity = @($items | Where-Object { $_.FullName -match '[\\/]docs[\\/]antigravity(?:[\\/]|$)' })
 if ($antigravity.Count -gt 0) {
