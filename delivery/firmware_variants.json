@@ -1,13 +1,13 @@
 ﻿{
-    "generated_at":  "2026-07-15T13:39:00",
+    "generated_at":  "2026-07-16T09:36:49",
     "note":  "Explicit product/rxdiag and CH5/CH9 firmware outputs. Product variants keep standby low-power build flags; RXDIAG variants are built with PRODUCT_LOW_POWER_MODE=0 and PRODUCT_LOW_POWER_AUTO_ENTRY=0. Do not use legacy firmware.bin aliases.",
     "variants":  [
                      {
                          "key":  "product_ch5",
                          "label":  "Product firmware CH5",
                          "file":  "delivery/firmware_product_ch5.bin",
-                         "sha256":  "5EB702E595A77E8B1B1BBA44ACB3AECE225EAD27A4B58F25B87E7A8C88A312D9",
-                         "size":  46536,
+                         "sha256":  "C523887B12CB72AEBFF711444F7DCE63E804BE03C2478C6932E068D63374FC79",
+                         "size":  46632,
                          "preset":  "Release",
                          "cflags":  "-DPRODUCT_LOW_POWER_MODE=2 -DPRODUCT_LOW_POWER_AUTO_ENTRY=1 -DUWB_RF_CHANNEL=5 -DUWB_RXDIAG_LOG_ENABLE=0 -DUWB_VERBOSE_TAG_DIAG_LOG_ENABLE=0"
                      },
@@ -15,8 +15,8 @@
                          "key":  "product_ch9",
                          "label":  "Product firmware CH9",
                          "file":  "delivery/firmware_product_ch9.bin",
-                         "sha256":  "467E1E18E376D503953B2E9A059CE10DF156612421FE576641320785A7084605",
-                         "size":  46568,
+                         "sha256":  "48078CDB84580D54620DB59A7B3B091B1FC39F79D8043E9AB82439BE4A96A110",
+                         "size":  46664,
                          "preset":  "Release",
                          "cflags":  "-DPRODUCT_LOW_POWER_MODE=2 -DPRODUCT_LOW_POWER_AUTO_ENTRY=1 -DUWB_RF_CHANNEL=9 -DUWB_RXDIAG_LOG_ENABLE=0 -DUWB_VERBOSE_TAG_DIAG_LOG_ENABLE=0"
                      },
@@ -24,8 +24,8 @@
                          "key":  "rxdiag_ch5",
                          "label":  "RXDIAG test firmware CH5 (no standby / no low-power auto-entry)",
                          "file":  "delivery/firmware_rxdiag_ch5.bin",
-                         "sha256":  "6F49916E69E01A2D90BB148B28F0C5B5B7A05CCEC562D1A587F762B402BFBAE2",
-                         "size":  46540,
+                         "sha256":  "B2BF4FD2200A2C3B435E3B4AD82EEF7991D12F0692CF6D6648294BCF2B82B349",
+                         "size":  46632,
                          "preset":  "Release-rxdiag",
                          "cflags":  "-DPRODUCT_LOW_POWER_MODE=0 -DPRODUCT_LOW_POWER_AUTO_ENTRY=0 -DUWB_RF_CHANNEL=5 -DUWB_RXDIAG_LOG_ENABLE=1 -DUWB_VERBOSE_TAG_DIAG_LOG_ENABLE=1"
                      },
@@ -33,8 +33,8 @@
                          "key":  "rxdiag_ch9",
                          "label":  "RXDIAG test firmware CH9 (no standby / no low-power auto-entry)",
                          "file":  "delivery/firmware_rxdiag_ch9.bin",
-                         "sha256":  "4C65DBD01F9138266F75AC3EEFAD722EDA944F1A9F4629E2D7B73CDE7FA1F42D",
-                         "size":  46564,
+                         "sha256":  "D5A9CCA177436DA71A6E181C8D40450B4A40DE511613D9AD271EE5615847A901",
+                         "size":  46656,
                          "preset":  "Release-rxdiag",
                          "cflags":  "-DPRODUCT_LOW_POWER_MODE=0 -DPRODUCT_LOW_POWER_AUTO_ENTRY=0 -DUWB_RF_CHANNEL=9 -DUWB_RXDIAG_LOG_ENABLE=1 -DUWB_VERBOSE_TAG_DIAG_LOG_ENABLE=1"
                      }
