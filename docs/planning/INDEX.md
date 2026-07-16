@@ -2,6 +2,8 @@
 
 Status: design only. Runtime code is unchanged.
 
+2026-07-15 기준 UWB 고도화 R&D는 CH9 중심으로 진행. CH5는 다수 국가 상용화 규제 제약으로 신규 우선순위에서 제외, 유지보수만 지속.
+
 ## Customer Responsibility
 
 `03_stm32-dw3000-G474RE-customer` is the sanitized delivery repository. It should receive only accepted Product changes from 02, with metadata sanitation and delivery artifact verification. It should not independently redesign ranging, CAN, low-power, scheduler, or high-rate behavior.
