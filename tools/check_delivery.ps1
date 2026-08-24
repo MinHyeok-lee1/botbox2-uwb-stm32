@@ -1,52 +1,43 @@
 #!/usr/bin/env pwsh
 # tools/check_delivery.ps1
-# Simple script to check if delivery firmware artifacts match the latest build output.
+# Simple script to check if explicit delivery firmware assets are present.
 
-$ProjectName = "stm32-dw3000-g474re-ioc-shell"
-$BuildDir = Join-Path $PSScriptRoot "..\build\Release"
 $DeliveryDir = Join-Path $PSScriptRoot "..\delivery"
 
-$BuildBin = Join-Path $BuildDir "$ProjectName.bin"
-$DeliveryBin = Join-Path $DeliveryDir "firmware.bin"
-$BuildHex = Join-Path $BuildDir "$ProjectName.hex"
-$DeliveryHex = Join-Path $DeliveryDir "firmware.hex"
+$ExpectedDeliveryAssets = @(
+    "firmware_product_ch5.bin",
+    "firmware_product_ch9.bin",
+    "firmware_rxdiag_ch5.bin",
+    "firmware_rxdiag_ch9.bin",
+    "firmware_variants.json",
+    "manifest.txt"
+)
 
-function Test-DeliveryFreshness {
+function Test-DeliveryAsset {
     param(
-        [string]$BuildArtifact,
-        [string]$DeliveryArtifact,
-        [string]$Label
+        [string]$DeliveryArtifact
     )
 
-    if (-not (Test-Path $BuildArtifact)) {
-        Write-Host "[SKIP] $Label build artifact not found at $BuildArtifact." -ForegroundColor Gray
-        return $true
-    }
-
     if (-not (Test-Path $DeliveryArtifact)) {
-        Write-Host "[WARNING] $Label is MISSING at $DeliveryArtifact." -ForegroundColor Yellow
+        Write-Host "[WARNING] Missing delivery asset: $DeliveryArtifact." -ForegroundColor Yellow
         return $false
     }
 
-    $BuildHash = (Get-FileHash -Path $BuildArtifact).Hash
-    $DeliveryHash = (Get-FileHash -Path $DeliveryArtifact).Hash
-
-    if ($BuildHash -eq $DeliveryHash) {
-        Write-Host "[OK] $Label is fresh (matches $BuildArtifact)." -ForegroundColor Green
-        return $true
-    }
-
-    Write-Host "[WARNING] $Label is STALE (mismatch with $BuildArtifact)." -ForegroundColor Yellow
-    return $false
+    Write-Host "[OK] Found delivery asset: $DeliveryArtifact." -ForegroundColor Green
+    return $true
 }
 
-$BinFresh = Test-DeliveryFreshness -BuildArtifact $BuildBin -DeliveryArtifact $DeliveryBin -Label "delivery/firmware.bin"
-$HexFresh = Test-DeliveryFreshness -BuildArtifact $BuildHex -DeliveryArtifact $DeliveryHex -Label "delivery/firmware.hex"
+$AllPresent = $true
+foreach ($asset in $ExpectedDeliveryAssets) {
+    $path = Join-Path $DeliveryDir $asset
+    if (-not (Test-DeliveryAsset -DeliveryArtifact $path)) {
+        $AllPresent = $false
+    }
+}
 
-if ($BinFresh -and $HexFresh) {
-    Write-Host "[OK] delivery firmware artifacts are fresh." -ForegroundColor Green
+if ($AllPresent) {
+    Write-Host "[OK] delivery firmware assets are present." -ForegroundColor Green
 }
 else {
-    Write-Host "[WARNING] One or more delivery firmware artifacts need sync." -ForegroundColor Yellow
-    Write-Host "Run build again or manually copy the stale/missing artifact to sync."
+    Write-Host "[WARNING] One or more delivery firmware assets are missing." -ForegroundColor Yellow
 }

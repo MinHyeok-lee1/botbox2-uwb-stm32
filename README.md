@@ -36,12 +36,12 @@ This Customer repository contains the sanitized delivery source and release asse
 
 ### Release Firmware Assets
 
-The release package includes the following firmware assets depending on operating profile:
+The release package includes the following explicit firmware assets depending on operating profile:
 
-- `firmware.bin` (Default firmware)
-- `firmware_rxdiag.bin`
 - `firmware_product_ch5.bin`
 - `firmware_product_ch9.bin`
+- `firmware_rxdiag_ch5.bin`
+- `firmware_rxdiag_ch9.bin`
 
 Runtime role, PAN ID, short address, and anchor topology are still controlled by `cfg.bin` at the reserved configuration flash area.
 
@@ -86,7 +86,7 @@ Runtime role, PAN ID, short address, and anchor topology are still controlled by
 
 ## 7. 배포 모델 (Deployment Model)
 본 프로젝트는 **고정 펌웨어(Golden Firmware)** 모델 및 운영 프로필별 release assets 구조를 따릅니다:
-1. **기본 공통 펌웨어 및 변형 바이너리:** 기본 공통 `firmware.bin` 외에도, 특정 운영 환경용 변형 바이너리(예: `firmware_rxdiag.bin`, `firmware_product_ch5.bin`, `firmware_product_ch9.bin`)들이 제공될 수 있습니다.
+1. **명시적 채널/프로필 펌웨어:** 현재 release assets는 `firmware_product_ch5.bin`, `firmware_product_ch9.bin`, `firmware_rxdiag_ch5.bin`, `firmware_rxdiag_ch9.bin`으로 구성됩니다. legacy 공통 `firmware.bin` / `firmware_rxdiag.bin`은 현재 Customer delivery asset이 아닙니다.
 2. **cfg.bin:** 런타임에 보드의 역할(TAG/ANCHOR), ID 및 레인징 파라미터를 결정하는 소형(40바이트) 설정 파일.
 
 ---
