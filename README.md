@@ -33,6 +33,7 @@ This Customer repository contains the sanitized delivery source and release asse
 - Product acceptance evidence and internal analysis stay in 02 Product, not in this Customer repository.
 - Customer release source: clean export from 02 Product.
 - 2026-07-15 delivery status: CH9 DW3000 recovery fixes have been propagated into this Customer delivery snapshot as sanitized runtime source and release assets. Detailed Product validation records remain in 02 Product.
+- 현재 Customer parity는 02 Product와 firmware binary SHA가 항상 byte-identical임을 뜻하지 않습니다. 공유 source/critical fix parity, Customer delivery manifest self-integrity, Product-only artifact exclusion을 기준으로 검증합니다.
 
 ### Release Firmware Assets
 
@@ -42,6 +43,8 @@ The release package includes the following explicit firmware assets depending on
 - `firmware_product_ch9.bin`
 - `firmware_rxdiag_ch5.bin`
 - `firmware_rxdiag_ch9.bin`
+
+02 Product의 `firmware_product_ch9_tdma_optimal.bin`은 Product-only opt-in artifact이며 Customer canonical delivery에 포함하지 않습니다.
 
 Runtime role, PAN ID, short address, and anchor topology are still controlled by `cfg.bin` at the reserved configuration flash area.
 

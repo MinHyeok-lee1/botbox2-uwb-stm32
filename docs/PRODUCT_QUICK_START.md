@@ -33,13 +33,14 @@ powershell -ExecutionPolicy Bypass -File .\tools\check_product_contracts.ps1
 # 프로비저닝 템플릿
 # <ST_LINK_SN>: 장치의 ST-LINK 일련번호
 # <cfg>: 선택한 설정 파일 이름 (예: anchor_2001)
-powershell -ExecutionPolicy Bypass -File .\tools\provision.ps1 -sn <ST_LINK_SN> -fw .\delivery\firmware.bin -cfg .\delivery\configs\<cfg>.bin
+powershell -ExecutionPolicy Bypass -File .\tools\provision.ps1 -sn <ST_LINK_SN> -fw .\delivery\firmware_product_ch9.bin -cfg .\delivery\configs\<cfg>.bin
 ```
 
-- **펌웨어 경로 (Firmware Path)**: `delivery/firmware.bin`
+- **펌웨어 경로 (Firmware Path)**: 기본 Customer CH9는 `delivery/firmware_product_ch9.bin`을 사용합니다. CH5가 필요한 경우 `delivery/firmware_product_ch5.bin`을 선택합니다. RXDIAG 검증에는 `delivery/firmware_rxdiag_ch5.bin` 또는 `delivery/firmware_rxdiag_ch9.bin`을 사용합니다.
 - **설정 파일 경로 (Config Path)**: `delivery/configs/*.bin`
 
 ## 4. 참고 사항 (Notes)
 <!-- Keywords: cfg.bin -->
-- 빌드 후 생성된 아티팩트는 `delivery/` 디렉토리에도 자동으로 복사됩니다.
+- Customer delivery는 explicit firmware asset 4종과 `delivery/manifest.txt`를 기준으로 검증합니다. legacy `delivery/firmware.bin`은 현재 Customer release asset이 아닙니다.
+- 02 Product의 `firmware_product_ch9_tdma_optimal.bin`은 Product-only opt-in artifact이며 Customer canonical delivery에 포함하지 않습니다.
 - 상세한 운영 가이드는 `docs/PRODUCT_PROVISIONING_GUIDE.md`를 참조하십시오.
