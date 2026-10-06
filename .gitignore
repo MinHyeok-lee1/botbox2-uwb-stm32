@@ -16,8 +16,8 @@ CMakeCache.txt
 mx.scratch
 .*
 
-!delivery/firmware.bin
-!delivery/firmware.hex
+delivery/firmware.bin
+delivery/firmware.hex
 !delivery/configs/*.bin
 !README.md
 !CMakeLists.txt
